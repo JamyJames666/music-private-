@@ -22,7 +22,8 @@ import {
 } from 'lucide-react'
 import { shuffle, clearQueue, move, remove, flushPending, type TrackInfo } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
-const fmtDuration = fmtTime
+// fmtDuration kept for compatibility
+const _fmtDuration = fmtTime; void _fmtDuration
 import SourceBadge from './SourceBadge'
 
 const PAGE_SIZE = 99999 // no pagination — one scrollable list
@@ -276,15 +277,27 @@ export default function QueueCard({
 
         {/* Song count + duration */}
         {displayQueue.length > 0 ? (
-          <div className="flex items-center gap-2 mr-auto">
+          <div className="flex items-center gap-2 mr-auto flex-wrap">
             <span className="text-xs tabular-nums" style={{ color: '#666' }}>
               {displayQueue.length} songs
             </span>
             {(() => {
-              const totalSec = (nowPlaying?.length ?? 0) + displayQueue.reduce((acc, s) => acc + s.length, 0)
+              // Total = remaining current song + all queued songs
+              const remainingSec = Math.max(0, (nowPlaying?.length ?? 0) - position)
+              const queueSec     = displayQueue.reduce((acc, s) => acc + s.length, 0)
+              const totalSec     = (nowPlaying?.length ?? 0) + queueSec
+              const pct          = totalSec > 0 ? Math.round((position / totalSec) * 100) : 0
+
+              const fmtMins = (s: number) => {
+                const h = Math.floor(s / 3600)
+                const m = Math.floor((s % 3600) / 60)
+                return h > 0 ? `${h}h ${m}m` : `${m}m`
+              }
+
               return totalSec > 0 ? (
-                <span className="text-xs tabular-nums" style={{ color: '#444' }}>
-                  · {fmtDuration(position)} of {fmtDuration(totalSec)}
+                <span className="text-xs tabular-nums" style={{ color: '#555' }}
+                  title={`${fmtMins(position)} into ${fmtMins(totalSec)} total · ${fmtMins(remainingSec + queueSec)} remaining`}>
+                  · {fmtMins(position)} of {fmtMins(totalSec)} <span style={{ color: '#a855f7' }}>{pct}%</span>
                 </span>
               ) : null
             })()}

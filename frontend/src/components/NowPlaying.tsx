@@ -28,7 +28,9 @@ export default function NowPlaying({ status, token, guildId, onRefresh }: Props)
       setSongUrl(np.url); setLocalPos(srvPos); setLocalLen(np.length); stopTick()
     } else {
       setLocalLen(np.length)
-      if (Math.abs(localPos - srvPos) > 3) setLocalPos(srvPos)
+      // Only sync if server value is non-zero and meaningfully different.
+      // srvPos briefly returns 0 during seek/skip transitions — ignore those.
+      if (srvPos > 0 && Math.abs(localPos - srvPos) > 3) setLocalPos(srvPos)
     }
     if (playing && !tickRef.current) {
       const rate = status.speed ?? 1
