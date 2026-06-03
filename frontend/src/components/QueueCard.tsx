@@ -295,9 +295,11 @@ export default function QueueCard({
               }
 
               return totalSec > 0 ? (
-                <span className="text-xs tabular-nums" style={{ color: '#555' }}
-                  title={`${fmtMins(position)} into ${fmtMins(totalSec)} total · ${fmtMins(remainingSec + queueSec)} remaining`}>
-                  · {fmtMins(position)} of {fmtMins(totalSec)} <span style={{ color: '#a855f7' }}>{pct}%</span>
+                <span className="text-xs tabular-nums font-medium"
+                  title={`${fmtMins(remainingSec + queueSec)} remaining`}
+                  style={{ color: '#666' }}>
+                  · {fmtMins(position)} / {fmtMins(totalSec)}
+                  <span className="ml-1.5 font-bold" style={{ color: '#a855f7' }}>{pct}%</span>
                 </span>
               ) : null
             })()}

@@ -9,9 +9,10 @@ interface Props {
   token: string
   guildId: string
   onRefresh: () => void
+  onPositionChange?: (pos: number) => void
 }
 
-export default function NowPlaying({ status, token, guildId, onRefresh }: Props) {
+export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange }: Props) {
   const [localPos, setLocalPos] = useState(0)
   const [localLen, setLocalLen] = useState(0)
   const [songUrl,  setSongUrl]  = useState('')
@@ -26,15 +27,23 @@ export default function NowPlaying({ status, token, guildId, onRefresh }: Props)
     const srvPos = status.position ?? 0
     if (np.url !== songUrl) {
       setSongUrl(np.url); setLocalPos(srvPos); setLocalLen(np.length); stopTick()
+      onPositionChange?.(srvPos)
     } else {
       setLocalLen(np.length)
       // Only sync if server value is non-zero and meaningfully different.
       // srvPos briefly returns 0 during seek/skip transitions — ignore those.
-      if (srvPos > 0 && Math.abs(localPos - srvPos) > 3) setLocalPos(srvPos)
+      if (srvPos > 0 && Math.abs(localPos - srvPos) > 3) {
+        setLocalPos(srvPos)
+        onPositionChange?.(srvPos)
+      }
     }
     if (playing && !tickRef.current) {
       const rate = status.speed ?? 1
-      tickRef.current = setInterval(() => setLocalPos(p => Math.min(p + rate, np.length)), 1000)
+      tickRef.current = setInterval(() => setLocalPos(p => {
+        const next = Math.min(p + rate, np.length)
+        onPositionChange?.(next)
+        return next
+      }), 1000)
     } else if (!playing) { stopTick() }
     return stopTick
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps

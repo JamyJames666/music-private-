@@ -38,11 +38,13 @@ function JammyLogo({ playing }: { playing: boolean }) {
 }
 
 export default function Dashboard({ token, onSessionExpired, onReconnecting }: Props) {
-  const [guilds,    setGuilds]    = useState<Guild[]>([])
-  const [channels,  setChannels]  = useState<Channel[]>([])
-  const [guildId,   setGuildId]   = useState<string>(() => localStorage.getItem('muse_guild') ?? '')
-  const [channelId, setChannelId] = useState<string>('')
-  const [status,    setStatus]    = useState<PlayerStatus | null>(null)
+  const [guilds,         setGuilds]         = useState<Guild[]>([])
+  const [channels,       setChannels]       = useState<Channel[]>([])
+  const [guildId,        setGuildId]        = useState<string>(() => localStorage.getItem('muse_guild') ?? '')
+  const [channelId,      setChannelId]      = useState<string>('')
+  const [status,         setStatus]         = useState<PlayerStatus | null>(null)
+  // Smooth position lifted here so QueueCard can use it for accurate % calculation
+  const [smoothPosition, setSmoothPosition] = useState(0)
   const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'bulk'>('player')
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
@@ -229,7 +231,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col gap-4 p-8 h-full overflow-y-auto">
-              <NowPlaying status={status} token={token} guildId={guildId} onRefresh={poll} />
+              <NowPlaying status={status} token={token} guildId={guildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
               <div className="mt-auto flex flex-col gap-3 pt-4">
                 <AddToQueue
                   token={token}
@@ -253,7 +255,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               onRefresh={poll}
               pendingCount={status?.pendingCount ?? 0}
               nowPlaying={status?.nowPlaying ?? null}
-              position={status?.position ?? 0}
+              position={smoothPosition}
               isPlaying={status?.status === 'PLAYING'}
             />
           </div>
