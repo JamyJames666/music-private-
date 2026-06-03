@@ -732,8 +732,16 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/queue/bulk-import', auth, async (req: express.Request, res: express.Response) => {
       const {password, queries, channelId} = req.body as {password?: string; queries?: string[]; channelId?: string};
 
-      if (!this.config.BULK_ADD_PASSWORD || password !== this.config.BULK_ADD_PASSWORD) {
-        res.status(401).json({error: 'Invalid bulk import password'});
+      const configuredPassword = (this.config.BULK_ADD_PASSWORD ?? '').trim();
+      const submittedPassword = (password ?? '').trim();
+
+      if (!configuredPassword) {
+        res.status(401).json({error: 'BULK_ADD_PASSWORD is not set in .env — restart the bot after adding it'});
+        return;
+      }
+
+      if (submittedPassword !== configuredPassword) {
+        res.status(401).json({error: 'Wrong password'});
         return;
       }
 
