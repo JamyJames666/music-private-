@@ -281,44 +281,15 @@ export default function QueueCard({
             <span className="text-xs tabular-nums" style={{ color: '#666' }}>
               {displayQueue.length} songs
             </span>
-            {(() => {
-              const queueSec  = displayQueue.reduce((acc, s) => acc + s.length, 0)
-              const totalSec  = (nowPlaying?.length ?? 0) + queueSec
-              const knowsDuration = totalSec > 0
-
-              const fmtMins = (s: number) => {
-                const h = Math.floor(s / 3600)
-                const m = Math.floor((s % 3600) / 60)
-                return h > 0 ? `${h}h ${m}m` : `${m}m`
-              }
-
-              if (knowsDuration) {
-                // Time-based % when durations are known
-                const pct = Math.round((position / totalSec) * 100)
-                return (
-                  <span className="text-xs tabular-nums font-medium" style={{ color: '#666' }}
-                    title={`${fmtMins(Math.max(0, (nowPlaying?.length ?? 0) - position) + queueSec)} remaining`}>
-                    · {fmtMins(position)} / {fmtMins(totalSec)}
-                    <span className="ml-1.5 font-bold" style={{ color: '#a855f7' }}>{pct}%</span>
-                  </span>
-                )
-              }
-
-              // Fallback: count-based — always works even when durations are 0
-              // "1 playing + N remaining = N+1 total" but we only know remaining
-              if (nowPlaying) {
-                const total = 1 + displayQueue.length
-                const played = 1
-                const pct = Math.round((played / total) * 100)
-                return (
-                  <span className="text-xs font-medium" style={{ color: '#666' }}>
-                    · song 1 of {total}
-                    <span className="ml-1.5 font-bold" style={{ color: '#a855f7' }}>{pct}%</span>
-                  </span>
-                )
-              }
-
-              return null
+            {nowPlaying && (() => {
+              const total = 1 + displayQueue.length
+              const pct   = Math.round((1 / total) * 100)
+              return (
+                <span className="text-xs tabular-nums font-medium" style={{ color: '#666' }}>
+                  · 1/{total}
+                  <span className="ml-1.5 font-bold" style={{ color: '#a855f7' }}>{pct}%</span>
+                </span>
+              )
             })()}
           </div>
         ) : (
