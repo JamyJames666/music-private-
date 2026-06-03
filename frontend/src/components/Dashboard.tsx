@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, Sun, Moon } from 'lucide-react'
+import { ChevronDown, Sun, Moon, ListPlus } from 'lucide-react'
 import {
   getGuilds, getChannels, getStatus,
   ApiError,
@@ -11,6 +11,7 @@ import AddToQueue from './AddToQueue'
 import BotSettings from './BotSettings'
 import DjDeckV3 from './DjDeckV3'
 import AutoDj from './AutoDj'
+import BulkImport from './BulkImport'
 
 interface Props {
   token: string
@@ -42,7 +43,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const [guildId,   setGuildId]   = useState<string>(() => localStorage.getItem('muse_guild') ?? '')
   const [channelId, setChannelId] = useState<string>('')
   const [status,    setStatus]    = useState<PlayerStatus | null>(null)
-  const [_view] = useState<'player' | 'dj' | 'autodj'>('player')
+  const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'bulk'>('player')
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('muse_theme') as 'dark' | 'light') ?? 'dark',
@@ -125,6 +126,20 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
           </div>
 
+          {/* Bulk Import tab — only visible when BULK_ADD_PASSWORD is set */}
+          {status?.hasBulkImport && (
+            <button
+              onClick={() => setView(v => v === 'bulk' ? 'player' : 'bulk')}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all border"
+              style={view === 'bulk'
+                ? { background: 'rgba(168,85,247,0.2)', color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)' }
+                : { background: 'transparent', color: '#666', borderColor: '#333' }}
+              title="Bulk Import songs from a text list"
+            >
+              <ListPlus size={13} /> Import
+            </button>
+          )}
+
           <button
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
@@ -156,9 +171,18 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
       </header>
 
       {/* Main */}
-      {_view === 'dj' ? (
+      {view === 'bulk' ? (
+        <BulkImport
+          token={token}
+          guildId={guildId}
+          channels={channels}
+          channelId={channelId}
+          onChannelChange={handleChannelChange}
+          onRefresh={poll}
+        />
+      ) : view === 'dj' ? (
         <DjDeckV3 status={status} token={token} guildId={guildId} onRefresh={poll} />
-      ) : _view === 'autodj' ? (
+      ) : view === 'autodj' ? (
         <AutoDj status={status} token={token} guildId={guildId} onRefresh={poll} />
       ) : (
         <div className="relative flex overflow-hidden" style={{ height: 'calc(100vh - 53px)' }}>

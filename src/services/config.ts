@@ -34,6 +34,8 @@ const CONFIG_MAP = {
   WEB_PORT: parseInt(process.env.WEB_PORT ?? '4000', 10),
   WEB_ONLY_MODE: process.env.WEB_ONLY_MODE === 'true',
   DISABLE_WEB_ANNOUNCEMENTS: process.env.DISABLE_WEB_ANNOUNCEMENTS === 'true',
+  // Password for the Bulk Import tab — set to enable the tab, leave empty to hide it.
+  BULK_ADD_PASSWORD: process.env.BULK_ADD_PASSWORD ?? '',
 } as const;
 
 const BOT_ACTIVITY_TYPE_MAP = {
@@ -65,6 +67,7 @@ export default class Config {
   readonly WEB_PORT!: number;
   readonly WEB_ONLY_MODE!: boolean;
   readonly DISABLE_WEB_ANNOUNCEMENTS!: boolean;
+  readonly BULK_ADD_PASSWORD!: string;
 
   constructor() {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {

@@ -391,6 +391,7 @@ export default class WebServer {
         loopQueue: player.loopCurrentQueue,
         pendingCount: player.getPendingCount(),
         pendingPreview: player.getPendingPreview(20).map(s => ({title: s.title, artist: s.artist})),
+        hasBulkImport: Boolean(this.config.BULK_ADD_PASSWORD),
         spotifyHasMore: (() => {
           // Restore context from queue if it was lost on restart
           if (!player.spotifyPlaylistContext) {
@@ -724,6 +725,62 @@ export default class WebServer {
       }
 
       res.json({ok: true, loopQueue: player.loopCurrentQueue});
+    });
+
+    // Bulk import: accepts lines in "Artist - Title" format, adds each as a search.
+    // Protected by a separate BULK_ADD_PASSWORD env var.
+    this.app.post('/api/guilds/:guildId/queue/bulk-import', auth, async (req: express.Request, res: express.Response) => {
+      const {password, queries, channelId} = req.body as {password?: string; queries?: string[]; channelId?: string};
+
+      if (!this.config.BULK_ADD_PASSWORD || password !== this.config.BULK_ADD_PASSWORD) {
+        res.status(401).json({error: 'Invalid bulk import password'});
+        return;
+      }
+
+      if (!Array.isArray(queries) || queries.length === 0) {
+        res.status(400).json({error: 'queries array is required'});
+        return;
+      }
+
+      try {
+        const guild = this.client.guilds.cache.get(req.params.guildId);
+        const player = this.playerManager.get(req.params.guildId);
+        const fallbackChannelId = guild?.channels.cache.find(c => c.type === ChannelType.GuildVoice)?.id ?? '';
+        const targetChannelId = channelId ?? fallbackChannelId;
+
+        const songs = queries.map(q => ({
+          source: 0 as const, // MediaSource.Youtube
+          title: q,
+          artist: '',
+          url: `ytsearch1:${q} lyric video`,
+          length: 0,
+          offset: 0,
+          playlist: null,
+          isLive: false,
+          thumbnailUrl: null,
+          addedInChannelId: targetChannelId,
+          requestedBy: 'web-dashboard',
+        }));
+
+        songs.forEach(song => {
+          player.add(song);
+        });
+
+        if (!player.voiceConnection && targetChannelId) {
+          const channel = guild?.channels.cache.get(targetChannelId) as VoiceChannel | undefined;
+          if (channel) {
+            await player.connect(channel);
+            await player.play().catch(() => null);
+          }
+        } else if (player.status === STATUS.IDLE) {
+          await player.play().catch(() => null);
+        }
+
+        player.prefetchThumbnails();
+        res.json({ok: true, added: songs.length});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
     });
 
     createServer(this.app).listen(this.port, () => {
