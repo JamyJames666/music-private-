@@ -124,6 +124,19 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <div className="flex items-center gap-2.5 mr-auto">
             <JammyLogo playing={status?.status === 'PLAYING'} />
             <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
+            {/* Bulk Import shortcut — always visible, password checked on submit */}
+            <button
+              onClick={() => setView(v => v === 'bulk' ? 'player' : 'bulk')}
+              title="Bulk Import songs"
+              className="ml-1 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+              style={view === 'bulk'
+                ? { background: 'rgba(168,85,247,0.25)', color: '#a855f7' }
+                : { background: 'transparent', color: '#444' }}
+              onMouseEnter={e => { if (view !== 'bulk') (e.currentTarget as HTMLElement).style.color = '#a855f7' }}
+              onMouseLeave={e => { if (view !== 'bulk') (e.currentTarget as HTMLElement).style.color = '#444' }}
+            >
+              <ListPlus size={15} />
+            </button>
           </div>
 
           {/* Bulk Import tab — only visible when BULK_ADD_PASSWORD is set */}
