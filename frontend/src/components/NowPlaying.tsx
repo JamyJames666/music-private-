@@ -30,9 +30,12 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       onPositionChange?.(srvPos)
     } else {
       setLocalLen(np.length)
-      // Only sync if server value is non-zero and meaningfully different.
-      // srvPos briefly returns 0 during seek/skip transitions — ignore those.
-      if (srvPos > 0 && Math.abs(localPos - srvPos) > 3) {
+      // Only sync when srvPos is ahead of localPos (not a transient reset to 0).
+      // A backwards jump (srvPos < localPos by more than 3s) only applies
+      // if srvPos is non-zero — zero means a transient skip/seek reset, ignore it.
+      const diff = srvPos - localPos
+      const shouldSync = srvPos > 0 && (diff > 3 || diff < -3) && !(srvPos < 5 && localPos > 10)
+      if (shouldSync) {
         setLocalPos(srvPos)
         onPositionChange?.(srvPos)
       }

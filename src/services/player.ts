@@ -806,6 +806,11 @@ export default class {
         }
 
         song.url = result.id;
+        // Update duration if the song had none (e.g. bulk import sets length=0)
+        if (!song.length && result.duration) {
+          song.length = result.duration;
+        }
+
         // YouTube thumbnails disabled — Deezer provides higher-quality
         // album art via prefetchThumbnails and doesn't show video screenshots.
       }
