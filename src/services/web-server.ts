@@ -191,6 +191,23 @@ export default class WebServer {
       res.json({token: this.generateToken()});
     });
 
+    // Bulk import login — same flow as main login but uses BULK_ADD_PASSWORD
+    this.app.post('/api/bulk-login', (req: express.Request, res: express.Response) => {
+      const bulkPw = this.config.BULK_ADD_PASSWORD;
+      if (!bulkPw) {
+        res.status(401).json({error: 'BULK_ADD_PASSWORD is not set — add it to .env and restart'});
+        return;
+      }
+
+      const {password} = req.body as {password?: string};
+      if ((password ?? '') !== bulkPw) {
+        res.status(401).json({error: 'Invalid bulk import password'});
+        return;
+      }
+
+      res.json({bulkToken: this.generateToken(bulkPw)});
+    });
+
     const auth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const header = req.headers.authorization ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -728,20 +745,13 @@ export default class WebServer {
     });
 
     // Bulk import: accepts lines in "Artist - Title" format, adds each as a search.
-    // Protected by a separate BULK_ADD_PASSWORD env var.
+    // Authenticated via bulkToken from /api/bulk-login (same mechanism as main auth).
     this.app.post('/api/guilds/:guildId/queue/bulk-import', auth, async (req: express.Request, res: express.Response) => {
-      const {password, queries, channelId} = req.body as {password?: string; queries?: string[]; channelId?: string};
+      const {bulkToken, queries, channelId} = req.body as {bulkToken?: string; queries?: string[]; channelId?: string};
 
-      const configuredPassword = (this.config.BULK_ADD_PASSWORD ?? '').trim();
-      const submittedPassword = (password ?? '').trim();
-
-      if (!configuredPassword) {
-        res.status(401).json({error: 'BULK_ADD_PASSWORD is not set in .env — restart the bot after adding it'});
-        return;
-      }
-
-      if (submittedPassword !== configuredPassword) {
-        res.status(401).json({error: 'Wrong password'});
+      const bulkPw = this.config.BULK_ADD_PASSWORD;
+      if (!bulkPw || !bulkToken || !this.verifyToken(bulkToken, bulkPw)) {
+        res.status(401).json({error: 'Invalid or expired bulk token — log in again'});
         return;
       }
 
@@ -796,13 +806,13 @@ export default class WebServer {
     });
   }
 
-  private generateToken(): string {
+  private generateToken(secret = this.password): string {
     const timestamp = Date.now().toString();
-    const sig = crypto.createHmac('sha256', this.password).update(timestamp).digest('hex');
+    const sig = crypto.createHmac('sha256', secret).update(timestamp).digest('hex');
     return Buffer.from(`${timestamp}.${sig}`).toString('base64url');
   }
 
-  private verifyToken(token: string): boolean {
+  private verifyToken(token: string, secret = this.password): boolean {
     try {
       const decoded = Buffer.from(token, 'base64url').toString();
       const dotIndex = decoded.lastIndexOf('.');
@@ -812,7 +822,7 @@ export default class WebServer {
 
       const timestamp = decoded.slice(0, dotIndex);
       const sig = decoded.slice(dotIndex + 1);
-      const expectedSig = crypto.createHmac('sha256', this.password).update(timestamp).digest('hex');
+      const expectedSig = crypto.createHmac('sha256', secret).update(timestamp).digest('hex');
 
       if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'))) {
         return false;
