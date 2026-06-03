@@ -131,6 +131,8 @@ export const refreshThumbnails    = (t: string, guildId: string) =>
   req<{ok: boolean; missing: number}>('POST', `/api/guilds/${guildId}/queue/refresh-thumbnails`, t)
 export const loadMoreSpotify      = (t: string, guildId: string) =>
   req<{ok: boolean; added: number; nextOffset: number; message?: string}>('POST', `/api/guilds/${guildId}/queue/load-more-spotify`, t)
+export const bulkConfigured = () =>
+  fetch('/api/bulk-configured').then(r => r.json() as Promise<{configured: boolean; length: number}>)
 export const bulkLogin  = (password: string) =>
   req<{bulkToken: string}>('POST', '/api/bulk-login', '', {password})
 export const bulkImport = (t: string, guildId: string, queries: string[], channelId: string, bulkToken: string) =>

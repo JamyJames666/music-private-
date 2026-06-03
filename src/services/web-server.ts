@@ -192,6 +192,13 @@ export default class WebServer {
     });
 
     // Bulk import login — same flow as main login but uses BULK_ADD_PASSWORD
+    // Diagnostic — tells the frontend whether BULK_ADD_PASSWORD is configured
+    // without revealing the actual value. No auth required.
+    this.app.get('/api/bulk-configured', (_req: express.Request, res: express.Response) => {
+      const pw = this.config.BULK_ADD_PASSWORD;
+      res.json({configured: Boolean(pw), length: pw.length});
+    });
+
     this.app.post('/api/bulk-login', (req: express.Request, res: express.Response) => {
       const bulkPw = this.config.BULK_ADD_PASSWORD;
       if (!bulkPw) {

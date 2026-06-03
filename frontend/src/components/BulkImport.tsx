@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Lock, Upload, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react'
-import { bulkLogin, bulkImport, type Channel } from '@/lib/api'
+import { bulkLogin, bulkImport, bulkConfigured, type Channel } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -24,10 +24,15 @@ function parseLine(line: string): string | null {
 }
 
 export default function BulkImport({ token, guildId, channels, channelId, onChannelChange, onRefresh }: Props) {
-  const [password,   setPassword]   = useState('')
-  const [bulkToken,  setBulkToken]  = useState<string | null>(() => sessionStorage.getItem('bulk_token'))
-  const [loginError, setLoginError] = useState('')
-  const [loginBusy,  setLoginBusy]  = useState(false)
+  const [password,    setPassword]   = useState('')
+  const [bulkToken,   setBulkToken]  = useState<string | null>(() => sessionStorage.getItem('bulk_token'))
+  const [loginError,  setLoginError] = useState('')
+  const [loginBusy,   setLoginBusy]  = useState(false)
+  const [serverInfo,  setServerInfo] = useState<{configured: boolean; length: number} | null>(null)
+
+  useEffect(() => {
+    bulkConfigured().then(setServerInfo).catch(() => null)
+  }, [])
 
   const [text,    setText]    = useState('')
   const [loading, setLoading] = useState(false)
@@ -116,6 +121,18 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
             {loginBusy ? 'Checking…' : 'Unlock'}
           </button>
         </form>
+
+        {/* Server diagnostic */}
+        {serverInfo !== null && (
+          <div className="text-xs text-center rounded-lg px-3 py-2"
+            style={{ background: serverInfo.configured ? 'rgba(34,197,94,0.08)' : 'rgba(244,63,94,0.08)',
+                     color: serverInfo.configured ? '#22c55e' : '#f43f5e',
+                     border: `1px solid ${serverInfo.configured ? 'rgba(34,197,94,0.2)' : 'rgba(244,63,94,0.2)'}` }}>
+            {serverInfo.configured
+              ? `✓ Server has BULK_ADD_PASSWORD set (${serverInfo.length} chars)`
+              : '✗ Server does not see BULK_ADD_PASSWORD — restart the bot after adding it to .env'}
+          </div>
+        )}
 
         <p className="text-xs text-center" style={{ color: '#444' }}>
           Set <code className="bg-app-panel px-1 rounded">BULK_ADD_PASSWORD</code> in <code className="bg-app-panel px-1 rounded">.env</code> to configure
