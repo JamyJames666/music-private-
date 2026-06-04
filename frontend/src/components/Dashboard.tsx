@@ -221,24 +221,12 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
           {/* Left: Now Playing */}
           <div className="w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
-            {/* Ambient glow */}
-            <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-              style={{
-                top: 40, width: 420, height: 420,
-                background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, rgba(99,102,241,0.10) 45%, transparent 70%)',
-                filter: 'blur(60px)',
-                borderRadius: '50%',
-                zIndex: 0,
-              }} />
-            <div className="relative z-10 flex flex-col h-full">
-              {/* Full-bleed Now Playing — absolutely fills the top portion */}
-              <div className="relative flex-1 min-h-0">
-                <div className="absolute inset-0">
-                  <NowPlaying status={status} token={token} guildId={guildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
-                </div>
-              </div>
-              {/* Scrollable cards underneath */}
-              <div className="flex flex-col gap-3 px-6 py-4 flex-shrink-0 overflow-y-auto" style={{ maxHeight: '42%' }}>
+            {/* NowPlaying — explicit 58% of panel height */}
+            <div style={{ height: '58%', position: 'relative', flexShrink: 0 }}>
+              <NowPlaying status={status} token={token} guildId={guildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
+            </div>
+            {/* Cards — remaining 42%, scrollable */}
+            <div className="flex flex-col gap-3 px-6 py-4 overflow-y-auto" style={{ height: '42%' }}>
                 <AddToQueue
                   token={token}
                   guildId={guildId}
@@ -248,7 +236,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   onRefresh={poll}
                 />
                 <BotSettings token={token} guildId={guildId} />
-              </div>
             </div>
           </div>
 
