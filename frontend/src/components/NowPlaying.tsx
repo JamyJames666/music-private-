@@ -22,17 +22,14 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
   useEffect(() => {
     if (!status?.nowPlaying) { stopTick(); return }
-    const np = status.nowPlaying
+    const np      = status.nowPlaying
     const playing = status.status === 'PLAYING'
-    const srvPos = status.position ?? 0
+    const srvPos  = status.position ?? 0
     if (np.url !== songUrl) {
       setSongUrl(np.url); setLocalPos(srvPos); setLocalLen(np.length); stopTick()
       onPositionChange?.(srvPos)
     } else {
       setLocalLen(np.length)
-      // Only sync when srvPos is ahead of localPos (not a transient reset to 0).
-      // A backwards jump (srvPos < localPos by more than 3s) only applies
-      // if srvPos is non-zero — zero means a transient skip/seek reset, ignore it.
       const diff = srvPos - localPos
       const shouldSync = srvPos > 0 && (diff > 3 || diff < -3) && !(srvPos < 5 && localPos > 10)
       if (shouldSync) {
@@ -71,145 +68,114 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     onRefresh()
   }, [active, localLen, token, guildId, onRefresh])
 
+  // Full-bleed: art fills the entire container, controls overlay at the bottom
   return (
-    <div className="relative flex flex-col items-center z-10 w-full max-w-lg mx-auto">
+    <div className="relative w-full h-full overflow-hidden" style={{ minHeight: 320 }}>
 
-      {/* Big ambient glow — pulsing when playing */}
-      <div
-        className="absolute pointer-events-none transition-opacity duration-700"
-        style={{
-          top: -20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 480,
-          height: 480,
-          background: active
-            ? 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(99,102,241,0.22) 40%, transparent 70%)'
-            : 'radial-gradient(circle, rgba(80,40,120,0.15) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-          borderRadius: '50%',
-          zIndex: 0,
-          animation: isPlaying ? 'pulse 3s ease-in-out infinite' : 'none',
-        }}
-      />
+      {/* Album art — fills the full panel */}
+      {np?.thumbnailUrl ? (
+        <img
+          src={np.thumbnailUrl}
+          alt={np?.title ?? ''}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ filter: active ? 'none' : 'brightness(0.4)' }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      ) : (
+        <div className="absolute inset-0 w-full h-full"
+          style={{ background: 'linear-gradient(135deg,#1a1030 0%,#0a0820 100%)' }} />
+      )}
 
-      {!active ? (
-        <div className="flex flex-col items-center gap-5 py-12 z-10">
-          <div
-            className="rounded-3xl flex items-center justify-center"
-            style={{ width: '100%', maxWidth: 480, aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
-          >
-            <Music size={72} style={{ color: '#333' }} />
-          </div>
-          <p className="text-white font-bold text-xl">Nothing playing</p>
+      {/* Subtle dark vignette so controls are readable */}
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)' }} />
+
+      {/* Nothing playing state */}
+      {!active && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+          <Music size={52} style={{ color: '#333' }} />
+          <p className="text-white font-bold text-lg">Nothing playing</p>
           <p className="text-sm" style={{ color: '#555' }}>Add a song to get started</p>
         </div>
-      ) : (
-        <>
-          {/* Album art — fills available width up to 480px */}
-          <div className="relative z-10 mt-4 mb-5 w-full" style={{ maxWidth: 480 }}>
-            {np?.thumbnailUrl ? (
-              <img
-                src={np.thumbnailUrl}
-                alt={np.title}
-                className="w-full rounded-3xl object-cover"
-                style={{
-                  aspectRatio: '1',
-                  boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)',
-                }}
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-              />
-            ) : (
-              <div
-                className="w-full rounded-3xl flex items-center justify-center"
-                style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
-              >
-                <Music size={72} style={{ color: '#7c3aed' }} />
-              </div>
-            )}
+      )}
 
-            {/* Animated bars — bottom right corner */}
-            <div className={cn('absolute bottom-4 right-4 flex items-end gap-[3px] h-5', !isPlaying && 'opacity-0')}>
-              <span className="block w-1 rounded-sm animate-bar"   style={{ background: 'rgba(255,255,255,0.8)' }} />
-              <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
-              <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
-            </div>
-          </div>
-
-          {/* Title + artist */}
-          <div className="text-center w-full px-6 z-10 mb-1" style={{ maxWidth: 380 }}>
-            <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 22 }} title={np?.title}>
+      {/* Controls overlay — frosted glass panel at the bottom */}
+      {active && (
+        <div
+          className="absolute left-4 right-4 bottom-4 z-10 rounded-2xl px-5 py-4 space-y-3"
+          style={{
+            background:   'rgba(12,10,20,0.65)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
+          }}
+        >
+          {/* Title + artist + badge */}
+          <div className="min-w-0">
+            <p className="font-bold text-white text-base leading-tight truncate" title={np?.title}>
               {np?.title ?? '—'}
             </p>
-            <div className="flex items-center justify-center gap-2 mt-1.5">
-              <p className="text-base truncate" style={{ color: '#888' }}>{np?.artist ?? '—'}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-sm truncate" style={{ color: '#aaa' }}>{np?.artist ?? '—'}</p>
               {np?.source && <SourceBadge source={np.source} />}
             </div>
           </div>
 
           {/* Progress bar */}
-          <div className="w-full px-6 z-10 mt-4 mb-5" style={{ maxWidth: 380 }}>
+          <div className="space-y-1">
             <div
               ref={progressRef}
               onClick={handleSeek}
-              className={cn('relative rounded-full overflow-hidden', active && 'cursor-pointer')}
-              style={{ height: 5, background: 'rgba(255,255,255,0.12)' }}
+              className={cn('relative h-1.5 rounded-full overflow-hidden', active && 'cursor-pointer group')}
+              style={{ background: 'rgba(255,255,255,0.15)' }}
             >
               <div
                 className="h-full rounded-full transition-[width] duration-1000"
                 style={{
                   width: `${pct}%`,
-                  background: 'linear-gradient(90deg, #a855f7, #6366f1)',
-                  boxShadow: '0 0 8px rgba(168,85,247,0.6)',
+                  background: 'linear-gradient(90deg,#a855f7,#6366f1)',
+                  boxShadow: '0 0 6px rgba(168,85,247,0.5)',
                 }}
               />
             </div>
-            <div className="flex justify-between text-xs mt-2" style={{ color: '#555' }}>
+            <div className="flex justify-between text-[11px]" style={{ color: '#888' }}>
               <span>{fmtTime(localPos)}</span>
               <span>{fmtTime(localLen)}</span>
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-6 z-10">
-            <button
-              onClick={handleStop}
+          {/* Transport buttons */}
+          <div className="flex items-center justify-center gap-5">
+            <button onClick={handleStop}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 38, height: 38, background: 'rgba(255,255,255,0.08)', color: '#888' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
-              title="Stop"
-            >
-              <Square size={18} />
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}>
+              <Square size={16} />
             </button>
 
-            {/* Big play/pause */}
-            <button
-              onClick={handlePause}
+            <button onClick={handlePause}
               className="flex items-center justify-center rounded-full transition-all hover:scale-105 active:scale-95"
               style={{
-                width: 68, height: 68,
+                width: 56, height: 56,
                 background: '#fff',
-                boxShadow: '0 0 0 8px rgba(168,85,247,0.20), 0 8px 32px rgba(0,0,0,0.5)',
-              }}
-            >
+                boxShadow: '0 0 0 6px rgba(168,85,247,0.2), 0 4px 20px rgba(0,0,0,0.4)',
+              }}>
               {isPlaying
-                ? <Pause size={24} style={{ color: '#000' }} />
-                : <Play  size={24} style={{ color: '#000', marginLeft: 3 }} />}
+                ? <Pause size={20} style={{ color: '#000' }} />
+                : <Play  size={20} style={{ color: '#000', marginLeft: 2 }} />}
             </button>
 
-            <button
-              onClick={handleSkip}
+            <button onClick={handleSkip}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 38, height: 38, background: 'rgba(255,255,255,0.08)', color: '#888' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
-              title="Skip"
-            >
-              <SkipForward size={18} />
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}>
+              <SkipForward size={16} />
             </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
