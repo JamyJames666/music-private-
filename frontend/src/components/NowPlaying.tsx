@@ -72,7 +72,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   }, [active, localLen, token, guildId, onRefresh])
 
   return (
-    <div className="relative flex flex-col items-center z-10 w-full">
+    <div className="relative flex flex-col items-center z-10 w-full max-w-lg mx-auto">
 
       {/* Big ambient glow — pulsing when playing */}
       <div
@@ -97,7 +97,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         <div className="flex flex-col items-center gap-5 py-12 z-10">
           <div
             className="rounded-3xl flex items-center justify-center"
-            style={{ width: 340, height: 340, background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
+            style={{ width: '100%', maxWidth: 480, aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
           >
             <Music size={72} style={{ color: '#333' }} />
           </div>
@@ -106,15 +106,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Album art */}
-          <div className="relative z-10 mt-6 mb-6" style={{ width: 340 }}>
+          {/* Album art — fills available width up to 480px */}
+          <div className="relative z-10 mt-4 mb-5 w-full" style={{ maxWidth: 480 }}>
             {np?.thumbnailUrl ? (
               <img
                 src={np.thumbnailUrl}
                 alt={np.title}
                 className="w-full rounded-3xl object-cover"
                 style={{
-                  height: 340,
+                  aspectRatio: '1',
                   boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)',
                 }}
                 onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -122,7 +122,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
             ) : (
               <div
                 className="w-full rounded-3xl flex items-center justify-center"
-                style={{ height: 340, background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
+                style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
               >
                 <Music size={72} style={{ color: '#7c3aed' }} />
               </div>
