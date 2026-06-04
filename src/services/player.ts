@@ -86,6 +86,9 @@ export default class {
   // so "Load More from Spotify" can fetch the next batch at the right offset.
   public spotifyPlaylistContext: {url: string; loadedCount: number} | null = null;
   private currentChannel: VoiceChannel | undefined;
+  // Extra connections for multi-channel broadcast (same audio, multiple channels)
+  private readonly extraConnections: Map<string, VoiceConnection> = new Map();
+  private readonly extraChannels: Map<string, VoiceChannel> = new Map();
   private queue: QueuedSong[] = [];
   private queuePosition = 0;
   // Songs waiting to be moved into the active queue as it empties.
@@ -185,6 +188,65 @@ export default class {
       this.channelToSpeakingUsers.clear();
       this.hasRegisteredVoiceActivityListener = false;
     }
+
+    // Also disconnect all extra channels
+    for (const conn of this.extraConnections.values()) {
+      try {
+        conn.destroy();
+      } catch { /* ignore */ }
+    }
+
+    this.extraConnections.clear();
+    this.extraChannels.clear();
+  }
+
+  // Join an additional voice channel and broadcast the same audio to it
+  async joinChannel(channel: VoiceChannel): Promise<void> {
+    if (this.extraConnections.has(channel.id) || channel.id === this.currentChannel?.id) {
+      return; // Already in this channel
+    }
+
+    const conn = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      selfDeaf: false,
+      adapterCreator: channel.guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
+    });
+
+    await this.waitForVoiceConnectionReady(conn);
+
+    this.extraConnections.set(channel.id, conn);
+    this.extraChannels.set(channel.id, channel);
+
+    // If already playing, subscribe this connection immediately
+    if (this.audioPlayer) {
+      conn.subscribe(this.audioPlayer);
+    }
+  }
+
+  leaveChannel(channelId: string): void {
+    const conn = this.extraConnections.get(channelId);
+    if (conn) {
+      try {
+        conn.destroy();
+      } catch { /* ignore */ }
+
+      this.extraConnections.delete(channelId);
+      this.extraChannels.delete(channelId);
+    }
+  }
+
+  getActiveChannelIds(): string[] {
+    const ids: string[] = [];
+    if (this.currentChannel) {
+      ids.push(this.currentChannel.id);
+    }
+
+    for (const id of this.extraConnections.keys()) {
+      ids.push(id);
+    }
+
+    return ids;
   }
 
   async seek(positionSeconds: number): Promise<void> {
@@ -217,6 +279,11 @@ export default class {
       },
     });
     voiceConnection.subscribe(this.audioPlayer);
+    // Subscribe extra channels to the same player (multicasting)
+    for (const conn of this.extraConnections.values()) {
+      conn.subscribe(this.audioPlayer);
+    }
+
     this.playAudioPlayerResource(this.createAudioStream(stream));
     this.attachListeners();
     this.startTrackingPosition(positionSeconds);
@@ -278,6 +345,10 @@ export default class {
         },
       });
       voiceConnection.subscribe(this.audioPlayer);
+      for (const conn of this.extraConnections.values()) {
+        conn.subscribe(this.audioPlayer);
+      }
+
       this.playAudioPlayerResource(this.createAudioStream(stream));
 
       this.attachListeners();
