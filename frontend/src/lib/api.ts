@@ -24,8 +24,9 @@ export interface PlayerStatus {
   effect:     AudioEffect
   eq:         { bass: number; mid: number; treble: number }
   crossfade:  number
-  loopSong:      boolean
-  loopQueue:     boolean
+  loopSong:          boolean
+  loopQueue:         boolean
+  activeChannelIds:  string[]
   pendingCount:      number
   spotifyHasMore:    boolean
   hasBulkImport:     boolean
@@ -125,6 +126,10 @@ export const toggleLoopSong  = (t: string, guildId: string) =>
   req('POST', `/api/guilds/${guildId}/loop-song`,  t)
 export const toggleLoopQueue = (t: string, guildId: string) =>
   req('POST', `/api/guilds/${guildId}/loop-queue`, t)
+export const joinChannel  = (t: string, guildId: string, channelId: string) =>
+  req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/join`,  t, {channelId})
+export const leaveChannel = (t: string, guildId: string, channelId: string) =>
+  req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/leave`, t, {channelId})
 export const flushPending         = (t: string, guildId: string, count = 100) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/queue/flush-pending`, t, {count})
 export const refreshThumbnails    = (t: string, guildId: string) =>

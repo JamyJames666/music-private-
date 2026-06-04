@@ -193,7 +193,7 @@ interface Props {
 }
 
 export default function QueueCard({
-  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, position = 0, isPlaying = false,
+  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, position: _pos = 0, isPlaying = false,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')

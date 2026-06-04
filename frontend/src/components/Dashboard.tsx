@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, Sun, Moon, ListPlus } from 'lucide-react'
+import { ChevronDown, Sun, Moon, ListPlus, Radio, X } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus,
+  getGuilds, getChannels, getStatus, joinChannel, leaveChannel,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -244,6 +244,48 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   onRefresh={poll}
                 />
                 <BotSettings token={token} guildId={guildId} />
+
+                {/* Broadcast to additional channels */}
+                {status?.status !== 'IDLE' && channels.length > 1 && (
+                  <div className="card p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Radio size={13} className="text-app-muted" />
+                      <h2 className="text-xs font-semibold text-app-muted uppercase tracking-widest">
+                        Broadcast to
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {channels
+                        .filter(c => c.id !== channelId)
+                        .map(c => {
+                          const isActive = (status?.activeChannelIds ?? []).includes(c.id)
+                          return (
+                            <button key={c.id}
+                              onClick={async () => {
+                                if (isActive) {
+                                  await leaveChannel(token, guildId, c.id).catch(() => null)
+                                } else {
+                                  await joinChannel(token, guildId, c.id).catch(() => null)
+                                }
+                                poll()
+                              }}
+                              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all"
+                              style={isActive
+                                ? { background: 'rgba(168,85,247,0.2)', color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)' }
+                                : { background: 'transparent', color: '#666', borderColor: '#333' }}>
+                              {isActive ? <X size={10} /> : <Radio size={10} />}
+                              {c.name}
+                            </button>
+                          )
+                        })}
+                    </div>
+                    {(status?.activeChannelIds?.length ?? 0) > 1 && (
+                      <p className="text-[10px] text-app-muted">
+                        Broadcasting to {status?.activeChannelIds?.length} channels simultaneously
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -413,6 +413,7 @@ export default class WebServer {
         crossfade: player.getCrossfade(),
         loopSong: player.loopCurrentSong,
         loopQueue: player.loopCurrentQueue,
+        activeChannelIds: player.getActiveChannelIds(),
         pendingCount: player.getPendingCount(),
         pendingPreview: player.getPendingPreview(20).map(s => ({title: s.title, artist: s.artist})),
         hasBulkImport: Boolean(this.config.BULK_ADD_PASSWORD),
@@ -803,6 +804,52 @@ export default class WebServer {
 
         player.prefetchThumbnails();
         res.json({ok: true, added: songs.length});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    // Join an additional voice channel — broadcasts same audio to both channels
+    this.app.post('/api/guilds/:guildId/channels/join', auth, async (req: express.Request, res: express.Response) => {
+      const {channelId} = req.body as {channelId?: string};
+      if (!channelId) {
+        res.status(400).json({error: 'channelId is required'});
+        return;
+      }
+
+      try {
+        const guild = this.client.guilds.cache.get(req.params.guildId);
+        if (!guild) {
+          res.status(404).json({error: 'Guild not found'});
+          return;
+        }
+
+        const channel = guild.channels.cache.get(channelId) as VoiceChannel | undefined;
+        if (!channel || channel.type !== ChannelType.GuildVoice) {
+          res.status(400).json({error: 'Channel not found or not a voice channel'});
+          return;
+        }
+
+        const player = this.playerManager.get(req.params.guildId);
+        await player.joinChannel(channel);
+        res.json({ok: true, activeChannelIds: player.getActiveChannelIds()});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    // Leave a specific voice channel (keeps others active)
+    this.app.post('/api/guilds/:guildId/channels/leave', auth, (req: express.Request, res: express.Response) => {
+      const {channelId} = req.body as {channelId?: string};
+      if (!channelId) {
+        res.status(400).json({error: 'channelId is required'});
+        return;
+      }
+
+      try {
+        const player = this.playerManager.get(req.params.guildId);
+        player.leaveChannel(channelId);
+        res.json({ok: true, activeChannelIds: player.getActiveChannelIds()});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
       }
