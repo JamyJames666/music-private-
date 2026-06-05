@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, ChevronDown } from 'lucide-react'
 import {
   getGuilds, getChannels, getStatus,
   ApiError,
-  type Channel, type PlayerStatus,
+  type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
@@ -34,6 +34,7 @@ function MusicBotLogo({ playing }: { playing: boolean }) {
 }
 
 export default function Dashboard({ token, onSessionExpired, onReconnecting }: Props) {
+  const [guilds,    setGuilds]    = useState<Guild[]>([])
   const [guildId,   setGuildId]   = useState<string>('')
   const [channels,  setChannels]  = useState<Channel[]>([])
   const [channelId, setChannelId] = useState<string>('')
@@ -48,10 +49,16 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     localStorage.setItem('muse_theme', theme)
   }, [theme])
 
-  // Auto-select first guild
+  // Load guilds and auto-select the saved one (or first)
   useEffect(() => {
     getGuilds(token)
-      .then(gs => { if (gs.length > 0) setGuildId(gs[0].id) })
+      .then(gs => {
+        setGuilds(gs)
+        if (gs.length === 0) return
+        const saved = localStorage.getItem('muse_guild')
+        const match = saved && gs.find(g => g.id === saved)
+        setGuildId(match ? saved! : gs[0].id)
+      })
       .catch(err => { if (err instanceof ApiError && err.status === 401) onSessionExpired() })
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -91,6 +98,12 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [poll])
 
+  const handleGuildChange = (id: string) => {
+    setGuildId(id)
+    setStatus(null)
+    localStorage.setItem('muse_guild', id)
+  }
+
   const handleChannelChange = (id: string) => {
     setChannelId(id)
     localStorage.setItem(`muse_channel_${guildId}`, id)
@@ -105,6 +118,23 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             <MusicBotLogo playing={status?.status === 'PLAYING'} />
             <span className="font-bold text-white text-base tracking-tight">MusicBot</span>
           </div>
+
+          {guilds.length > 0 && (
+            <div className="relative">
+              <select
+                value={guildId}
+                onChange={e => handleGuildChange(e.target.value)}
+                className="appearance-none bg-app-panel border border-app-border rounded-lg
+                           text-app-text text-sm pl-3 pr-8 py-1.5 cursor-pointer
+                           focus:outline-none focus:border-app-accent transition-colors"
+              >
+                {guilds.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#888' }} />
+            </div>
+          )}
 
           <button
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
