@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, SkipForward, Square, Music } from 'lucide-react'
-import { pause, resume, skip, stop, type PlayerStatus } from '@/lib/api'
+import { Play, Pause, SkipForward, Square, Music, LogOut } from 'lucide-react'
+import { pause, resume, skip, stop, disconnect, type PlayerStatus } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
 
@@ -58,7 +58,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
   const handlePause = async () => { await (isPlaying ? pause(token, guildId) : resume(token, guildId)).catch(() => null); onRefresh() }
   const handleSkip  = async () => { await skip(token, guildId).catch(() => null); onRefresh() }
-  const handleStop  = async () => { await stop(token, guildId).catch(() => null); onRefresh() }
+  const handleStop       = async () => { await stop(token, guildId).catch(() => null); onRefresh() }
+  const handleDisconnect = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
 
   const progressRef = useRef<HTMLDivElement>(null)
   const handleSeek  = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
@@ -207,6 +208,17 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               title="Skip"
             >
               <SkipForward size={18} />
+            </button>
+
+            <button
+              onClick={handleDisconnect}
+              className="flex items-center justify-center rounded-full transition-all hover:scale-110"
+              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f97316' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
+              title="Disconnect (queue preserved for 5 min)"
+            >
+              <LogOut size={18} />
             </button>
           </div>
         </>

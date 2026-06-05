@@ -113,6 +113,7 @@ export default class {
   private readonly fileCache: FileCacheProvider;
   private disconnectTimer: NodeJS.Timeout | null = null;
   private emptyChannelTimer: NodeJS.Timeout | null = null;
+  private queueClearTimer: NodeJS.Timeout | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
@@ -125,6 +126,12 @@ export default class {
   async connect(channel: VoiceChannel): Promise<void> {
     if (this.voiceConnection) {
       this.disconnect();
+    }
+
+    // Cancel any pending soft-disconnect queue-clear
+    if (this.queueClearTimer) {
+      clearTimeout(this.queueClearTimer);
+      this.queueClearTimer = null;
     }
 
     // Always get freshest default volume setting value
@@ -639,6 +646,22 @@ export default class {
     this.disconnect();
     this.queuePosition = 0;
     this.queue = [];
+  }
+
+  // Leaves the voice channel but preserves the queue for 300 seconds.
+  // If the bot reconnects within that window the timer is cancelled.
+  softDisconnect(gracePeriodSeconds = 300): void {
+    this.disconnect();
+
+    if (this.queueClearTimer) {
+      clearTimeout(this.queueClearTimer);
+    }
+
+    this.queueClearTimer = setTimeout(() => {
+      this.queueClearTimer = null;
+      this.queuePosition = 0;
+      this.queue = [];
+    }, gracePeriodSeconds * 1000);
   }
 
   /**

@@ -98,10 +98,11 @@ export const play    = (t: string, guildId: string, query: string, channelId?: s
   req<{ ok: boolean; added: number; queued: number; pending: number; first: string }>(
     'POST', `/api/guilds/${guildId}/play`, t, { query, channelId },
   )
-export const pause   = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/pause`,  t)
-export const resume  = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/resume`, t)
-export const skip    = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/skip`,   t)
-export const stop    = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/stop`,   t)
+export const pause      = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/pause`,      t)
+export const resume     = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/resume`,     t)
+export const skip       = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/skip`,       t)
+export const stop       = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/stop`,       t)
+export const disconnect = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/disconnect`, t)
 export const shuffle    = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/queue/shuffle`, t)
 export const clearQueue = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/queue/clear`,   t)
 export const move       = (t: string, guildId: string, from: number, to: number) =>

@@ -503,6 +503,15 @@ export default class WebServer {
       }
     });
 
+    this.app.post('/api/guilds/:guildId/disconnect', auth, (req: express.Request, res: express.Response) => {
+      try {
+        this.playerManager.get(req.params.guildId).softDisconnect();
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
     this.app.post('/api/guilds/:guildId/queue/shuffle', auth, (req: express.Request, res: express.Response) => {
       try {
         const player = this.playerManager.get(req.params.guildId);
