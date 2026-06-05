@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, Sun, Moon, Plus, X, ChevronRight } from 'lucide-react'
+import { Sun, Moon } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip,
+  getGuilds, getChannels, getStatus,
   ApiError,
-  type Guild, type Channel, type PlayerStatus,
+  type Channel, type PlayerStatus,
 } from '@/lib/api'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
@@ -15,7 +15,7 @@ interface Props {
   onReconnecting: (v: boolean) => void
 }
 
-function JammyLogo({ playing }: { playing: boolean }) {
+function MusicBotLogo({ playing }: { playing: boolean }) {
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="28" height="28" rx="8" fill="url(#logoGrad)" />
@@ -33,212 +33,11 @@ function JammyLogo({ playing }: { playing: boolean }) {
   )
 }
 
-function fmtTime(s: number) {
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
-}
-
-// ── Secondary guild compact card ──────────────────────────────────────────────
-
-interface SecondaryCardProps {
-  token: string
-  guildId: string
-  guildName: string
-  channels: Channel[]
-  channelId: string
-  onChannelChange: (id: string) => void
-  onRemove: () => void
-}
-
-function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, onChannelChange, onRemove }: SecondaryCardProps) {
-  const [status, setStatus] = useState<PlayerStatus | null>(null)
-
-  useEffect(() => {
-    if (!guildId) return
-    const poll = async () => {
-      try { setStatus(await getStatus(token, guildId)) } catch { /* non-fatal */ }
-    }
-    poll()
-    const t = setInterval(poll, 3000)
-    return () => clearInterval(t)
-  }, [token, guildId])
-
-  const np = status?.nowPlaying
-
-  return (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ChevronRight size={11} style={{ color: '#a855f7' }} />
-          <span className="text-xs font-semibold" style={{ color: '#a855f7' }}>{guildName}</span>
-        </div>
-        <button onClick={onRemove} className="text-app-muted hover:text-white transition-colors">
-          <X size={13} />
-        </button>
-      </div>
-
-      {/* Channel picker */}
-      {channels.length > 0 && (
-        <div className="relative w-fit">
-          <select
-            value={channelId}
-            onChange={e => onChannelChange(e.target.value)}
-            className="appearance-none bg-app-panel border border-app-border rounded-lg
-                       text-app-text text-xs pl-3 pr-7 py-1.5 cursor-pointer
-                       focus:outline-none focus:border-app-accent transition-colors min-w-[140px]"
-          >
-            {channels.map(c => (
-              <option key={c.id} value={c.id}>🔊 {c.name}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#888' }} />
-        </div>
-      )}
-
-      {/* Now playing */}
-      <div className="flex items-center gap-3">
-        {np?.thumbnailUrl ? (
-          <img src={np.thumbnailUrl} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-        ) : (
-          <div className="w-10 h-10 rounded-lg flex-shrink-0" style={{ background: '#1c1c1c' }} />
-        )}
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-white truncate">{np?.title ?? (status?.status === 'IDLE' ? 'Idle' : '—')}</p>
-          <p className="text-[11px] truncate" style={{ color: '#666' }}>{np?.artist ?? ''}</p>
-          {np && (
-            <p className="text-[10px] tabular-nums" style={{ color: '#555' }}>
-              {fmtTime(status?.position ?? 0)} / {fmtTime(np.length)}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex items-center gap-2">
-        {status?.status === 'PLAYING' ? (
-          <button
-            onClick={() => pause(token, guildId).catch(() => null)}
-            className="text-xs px-2.5 py-1 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
-          >Pause</button>
-        ) : status?.status === 'PAUSED' ? (
-          <button
-            onClick={() => resume(token, guildId).catch(() => null)}
-            className="text-xs px-2.5 py-1 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
-          >Resume</button>
-        ) : null}
-        {status?.status !== 'IDLE' && (
-          <button
-            onClick={() => skip(token, guildId).catch(() => null)}
-            className="text-xs px-2.5 py-1 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
-          >Skip</button>
-        )}
-        {status && (
-          <span className="text-[10px] ml-auto" style={{ color: '#555' }}>
-            {status.queue.length} in queue
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Guild pill selector ───────────────────────────────────────────────────────
-
-const MAX_GUILDS = 2
-
-interface GuildSelectorProps {
-  guilds: Guild[]
-  selectedIds: string[]
-  onAdd: (id: string) => void
-  onRemove: (id: string) => void
-}
-
-function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorProps) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const available = guilds.filter(g => !selectedIds.includes(g.id))
-  const atMax = selectedIds.length >= MAX_GUILDS
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {selectedIds.map(id => {
-        const g = guilds.find(g => g.id === id)
-        return (
-          <span key={id} className="flex items-center gap-1.5 text-sm pl-3 pr-2 py-1.5 rounded-xl border border-app-border"
-            style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc' }}>
-            {g?.name ?? id}
-            <button onClick={() => onRemove(id)} className="hover:text-white transition-colors ml-0.5">
-              <X size={12} />
-            </button>
-          </span>
-        )
-      })}
-
-      {!atMax && (
-        <div className="relative" ref={ref}>
-          <button
-            onClick={() => setOpen(o => !o)}
-            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-app-border text-app-muted hover:text-white hover:border-app-muted/50 transition-colors"
-            style={{ background: 'transparent' }}
-          >
-            <Plus size={12} /> Add server
-          </button>
-          {open && available.length > 0 && (
-            <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-xl border border-app-border overflow-hidden"
-              style={{ background: '#141018' }}>
-              {available.map(g => (
-                <button key={g.id} onClick={() => { onAdd(g.id); setOpen(false) }}
-                  className="w-full text-left text-sm px-4 py-2.5 text-app-text hover:bg-app-panel transition-colors">
-                  {g.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {open && available.length === 0 && (
-            <div className="absolute top-full mt-1 right-0 z-50 min-w-[180px] rounded-xl border border-app-border px-4 py-3"
-              style={{ background: '#141018', color: '#666', fontSize: '12px' }}>
-              No other servers available
-            </div>
-          )}
-        </div>
-      )}
-
-      {atMax && (
-        <span className="text-[11px]" style={{ color: '#555' }}>Max {MAX_GUILDS} servers</span>
-      )}
-    </div>
-  )
-}
-
-// ── Main dashboard ────────────────────────────────────────────────────────────
-
 export default function Dashboard({ token, onSessionExpired, onReconnecting }: Props) {
-  const [guilds, setGuilds] = useState<Guild[]>([])
-
-  // Up to 2 selected guild IDs — primary is [0], secondary is [1]
-  const [selectedGuildIds, setSelectedGuildIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('muse_guilds') ?? '[]') } catch { return [] }
-  })
-
-  const primaryGuildId   = selectedGuildIds[0] ?? ''
-  const secondaryGuildId = selectedGuildIds[1] ?? ''
-
-  const [primaryChannels,   setPrimaryChannels]   = useState<Channel[]>([])
-  const [secondaryChannels, setSecondaryChannels] = useState<Channel[]>([])
-  const [primaryChannelId,  setPrimaryChannelId]  = useState<string>('')
-  const [secondaryChannelId, setSecondaryChannelId] = useState<string>('')
-
-  const [status,         setStatus]         = useState<PlayerStatus | null>(null)
+  const [guildId,   setGuildId]   = useState<string>('')
+  const [channels,  setChannels]  = useState<Channel[]>([])
+  const [channelId, setChannelId] = useState<string>('')
+  const [status,    setStatus]    = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
@@ -249,55 +48,32 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     localStorage.setItem('muse_theme', theme)
   }, [theme])
 
-  // Load all guilds
+  // Auto-select first guild
   useEffect(() => {
     getGuilds(token)
-      .then(gs => {
-        setGuilds(gs)
-        // Auto-select first guild if nothing selected yet
-        if (selectedGuildIds.length === 0 && gs.length > 0) {
-          const ids = [gs[0].id]
-          setSelectedGuildIds(ids)
-          localStorage.setItem('muse_guilds', JSON.stringify(ids))
-        }
-      })
-      .catch(err => {
-        if (err instanceof ApiError && err.status === 401) onSessionExpired()
-      })
+      .then(gs => { if (gs.length > 0) setGuildId(gs[0].id) })
+      .catch(err => { if (err instanceof ApiError && err.status === 401) onSessionExpired() })
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load primary guild channels
+  // Load channels for guild
   useEffect(() => {
-    if (!primaryGuildId) return
-    getChannels(token, primaryGuildId)
+    if (!guildId) return
+    getChannels(token, guildId)
       .then(cs => {
-        setPrimaryChannels(cs)
-        const saved = localStorage.getItem(`muse_channel_${primaryGuildId}`)
+        setChannels(cs)
+        const saved = localStorage.getItem(`muse_channel_${guildId}`)
         const match = saved && cs.find(c => c.id === saved)
-        setPrimaryChannelId(match ? saved! : cs[0]?.id ?? '')
+        setChannelId(match ? saved! : cs[0]?.id ?? '')
       })
       .catch(() => { /* non-fatal */ })
-  }, [token, primaryGuildId])
-
-  // Load secondary guild channels
-  useEffect(() => {
-    if (!secondaryGuildId) { setSecondaryChannels([]); return }
-    getChannels(token, secondaryGuildId)
-      .then(cs => {
-        setSecondaryChannels(cs)
-        const saved = localStorage.getItem(`muse_channel_${secondaryGuildId}`)
-        const match = saved && cs.find(c => c.id === saved)
-        setSecondaryChannelId(match ? saved! : cs[0]?.id ?? '')
-      })
-      .catch(() => { /* non-fatal */ })
-  }, [token, secondaryGuildId])
+  }, [token, guildId])
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const poll = useCallback(async () => {
-    if (!primaryGuildId) return
+    if (!guildId) return
     try {
-      const s = await getStatus(token, primaryGuildId)
+      const s = await getStatus(token, guildId)
       setStatus(s)
       onReconnecting(false)
     } catch (err) {
@@ -307,7 +83,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
         onReconnecting(true)
       }
     }
-  }, [token, primaryGuildId, onSessionExpired, onReconnecting])
+  }, [token, guildId, onSessionExpired, onReconnecting])
 
   useEffect(() => {
     poll()
@@ -315,40 +91,19 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [poll])
 
-  const addGuild = (id: string) => {
-    const next = [...selectedGuildIds.filter(g => g !== id), id].slice(0, MAX_GUILDS)
-    setSelectedGuildIds(next)
-    localStorage.setItem('muse_guilds', JSON.stringify(next))
+  const handleChannelChange = (id: string) => {
+    setChannelId(id)
+    localStorage.setItem(`muse_channel_${guildId}`, id)
   }
-
-  const removeGuild = (id: string) => {
-    const next = selectedGuildIds.filter(g => g !== id)
-    // If removing the primary, promote secondary
-    setSelectedGuildIds(next)
-    localStorage.setItem('muse_guilds', JSON.stringify(next))
-    setStatus(null)
-  }
-
-  const handlePrimaryChannelChange = (id: string) => {
-    setPrimaryChannelId(id)
-    localStorage.setItem(`muse_channel_${primaryGuildId}`, id)
-  }
-
-  const handleSecondaryChannelChange = (id: string) => {
-    setSecondaryChannelId(id)
-    localStorage.setItem(`muse_channel_${secondaryGuildId}`, id)
-  }
-
-  const secondaryGuild = guilds.find(g => g.id === secondaryGuildId)
 
   return (
     <div className="min-h-screen bg-app-bg">
       <header className="sticky top-0 z-30 backdrop-blur-md px-6 py-3"
         style={{ background: 'rgba(7,6,15,0.75)' }}>
-        <div className="max-w-[1800px] mx-auto flex items-center gap-4 flex-wrap">
+        <div className="max-w-[1800px] mx-auto flex items-center gap-4">
           <div className="flex items-center gap-2.5 mr-auto">
-            <JammyLogo playing={status?.status === 'PLAYING'} />
-            <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
+            <MusicBotLogo playing={status?.status === 'PLAYING'} />
+            <span className="font-bold text-white text-base tracking-tight">MusicBot</span>
           </div>
 
           <button
@@ -359,14 +114,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           >
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
-
-          {/* Multi-guild pill selector */}
-          <GuildSelector
-            guilds={guilds}
-            selectedIds={selectedGuildIds}
-            onAdd={addGuild}
-            onRemove={removeGuild}
-          />
         </div>
       </header>
 
@@ -400,38 +147,27 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             }} />
           <div className="relative z-10 flex flex-col h-full overflow-y-auto">
             <div className="px-8 pt-6 pb-4">
-              <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
+              <NowPlaying status={status} token={token} guildId={guildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
             </div>
             <div className="flex flex-col gap-3 px-8 pb-6">
               <AddToQueue
                 token={token}
-                guildId={primaryGuildId}
-                channels={primaryChannels}
-                channelId={primaryChannelId}
-                onChannelChange={handlePrimaryChannelChange}
+                guildId={guildId}
+                channels={channels}
+                channelId={channelId}
+                onChannelChange={handleChannelChange}
                 onRefresh={poll}
               />
             </div>
           </div>
         </div>
 
-        {/* Right: Queue + optional secondary guild card */}
+        {/* Right: Queue */}
         <div className="w-1/2 flex flex-col overflow-hidden" style={{ zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
-          {secondaryGuildId && secondaryGuild && (
-            <SecondaryGuildCard
-              token={token}
-              guildId={secondaryGuildId}
-              guildName={secondaryGuild.name}
-              channels={secondaryChannels}
-              channelId={secondaryChannelId}
-              onChannelChange={handleSecondaryChannelChange}
-              onRemove={() => removeGuild(secondaryGuildId)}
-            />
-          )}
           <QueueCard
             queue={status?.queue ?? []}
             token={token}
-            guildId={primaryGuildId}
+            guildId={guildId}
             onRefresh={poll}
             pendingCount={status?.pendingCount ?? 0}
             nowPlaying={status?.nowPlaying ?? null}
