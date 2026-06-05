@@ -478,30 +478,25 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   channelId={primaryChannelId}
                   onChannelChange={handlePrimaryChannelChange}
                   onRefresh={poll}
-                  syncGuildId={secondaryGuildId || undefined}
-                  syncChannelId={secondaryChannelId || undefined}
-                  syncGuildName={secondaryGuild?.name}
                 />
                 <BotSettings token={token} guildId={primaryGuildId} />
-
-                {/* Secondary guild card */}
-                {secondaryGuildId && secondaryGuild && (
-                  <SecondaryGuildCard
-                    token={token}
-                    guildId={secondaryGuildId}
-                    guildName={secondaryGuild.name}
-                    channels={secondaryChannels}
-                    channelId={secondaryChannelId}
-                    onChannelChange={handleSecondaryChannelChange}
-                    onRemove={() => removeGuild(secondaryGuildId)}
-                  />
-                )}
               </div>
             </div>
           </div>
 
-          {/* Right: Queue */}
+          {/* Right: Queue + optional secondary guild card */}
           <div className="w-1/2 flex flex-col overflow-hidden" style={{ zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
+            {secondaryGuildId && secondaryGuild && (
+              <SecondaryGuildCard
+                token={token}
+                guildId={secondaryGuildId}
+                guildName={secondaryGuild.name}
+                channels={secondaryChannels}
+                channelId={secondaryChannelId}
+                onChannelChange={handleSecondaryChannelChange}
+                onRemove={() => removeGuild(secondaryGuildId)}
+              />
+            )}
             <QueueCard
               queue={status?.queue ?? []}
               token={token}
