@@ -53,11 +53,23 @@ export default class implements Command {
   }
 
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const query = interaction.options.getString('query')!;
+    const rawQuery = interaction.options.getString('query')!.trim();
+
+    // For plain-text searches append "lyrics" so YouTube returns the audio/lyrics
+    // video rather than the official MV (which often has a long intro).
+    // Skip if it's a URL or the user already included "lyrics".
+    let query = rawQuery;
+    try {
+      new URL(rawQuery);
+    } catch {
+      if (!rawQuery.toLowerCase().includes('lyrics')) {
+        query = `${rawQuery} lyrics`;
+      }
+    }
 
     await this.addQueryToQueue.addToQueue({
       interaction,
-      query: query.trim(),
+      query,
       addToFrontOfQueue: interaction.options.getBoolean('immediate') ?? false,
       shuffleAdditions: interaction.options.getBoolean('shuffle') ?? false,
       shouldSplitChapters: interaction.options.getBoolean('split') ?? false,

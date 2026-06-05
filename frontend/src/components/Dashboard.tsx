@@ -554,12 +554,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               className="absolute inset-0 pointer-events-none animate-fade-in"
               style={{
                 backgroundImage:    `url(${status.nowPlaying.thumbnailUrl})`,
-                backgroundSize:     'contain',
+                backgroundSize:     'cover',
                 backgroundPosition: 'center',
-                backgroundRepeat:   'no-repeat',
-                filter:             'blur(55px) saturate(2) brightness(1.15)',
-                opacity:            0.35,
-                transform:          'scale(1)',
+                filter:             'blur(80px) saturate(2.2) brightness(1.3)',
+                opacity:            0.32,
+                transform:          'scale(1.1)',
                 zIndex:             0,
               }}
             />
