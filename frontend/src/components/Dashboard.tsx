@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight, Lock } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, joinChannel,
+  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, moveChannel,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -556,9 +556,9 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 backgroundImage:    `url(${status.nowPlaying.thumbnailUrl})`,
                 backgroundSize:     'cover',
                 backgroundPosition: 'center',
-                filter:             'blur(80px) saturate(2.2) brightness(1.3)',
-                opacity:            0.32,
-                transform:          'scale(1.1)',
+                filter:             'blur(120px) saturate(1.8) brightness(1.1)',
+                opacity:            0.28,
+                transform:          'scale(1.02)',
                 zIndex:             0,
               }}
             />
@@ -600,7 +600,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                         return (
                           <button
                             key={c.id}
-                            onClick={() => joinChannel(token, primaryGuildId, c.id).then(poll).catch(() => null)}
+                            onClick={() => moveChannel(token, primaryGuildId, c.id).then(poll).catch(() => null)}
                             className="text-xs px-3 py-1.5 rounded-lg border transition-all"
                             style={active
                               ? { background: 'rgba(168,85,247,0.15)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)' }

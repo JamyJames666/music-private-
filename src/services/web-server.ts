@@ -882,6 +882,35 @@ export default class WebServer {
       }
     });
 
+    // Move primary connection to a different channel (drops old primary, preserves queue)
+    this.app.post('/api/guilds/:guildId/channels/move', auth, async (req: express.Request, res: express.Response) => {
+      const {channelId} = req.body as {channelId?: string};
+      if (!channelId) {
+        res.status(400).json({error: 'channelId is required'});
+        return;
+      }
+
+      try {
+        const guild = this.client.guilds.cache.get(req.params.guildId);
+        if (!guild) {
+          res.status(404).json({error: 'Guild not found'});
+          return;
+        }
+
+        const channel = guild.channels.cache.get(channelId) as VoiceChannel | undefined;
+        if (!channel || channel.type !== ChannelType.GuildVoice) {
+          res.status(400).json({error: 'Channel not found or not a voice channel'});
+          return;
+        }
+
+        const player = this.playerManager.get(req.params.guildId);
+        await player.connect(channel);
+        res.json({ok: true, activeChannelIds: player.getActiveChannelIds()});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
     // Leave a specific voice channel (keeps others active)
     this.app.post('/api/guilds/:guildId/channels/leave', auth, (req: express.Request, res: express.Response) => {
       const {channelId} = req.body as {channelId?: string};

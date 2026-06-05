@@ -131,6 +131,8 @@ export const joinChannel  = (t: string, guildId: string, channelId: string) =>
   req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/join`,  t, {channelId})
 export const leaveChannel = (t: string, guildId: string, channelId: string) =>
   req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/leave`, t, {channelId})
+export const moveChannel  = (t: string, guildId: string, channelId: string) =>
+  req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/move`,  t, {channelId})
 export const flushPending         = (t: string, guildId: string, count = 100) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/queue/flush-pending`, t, {count})
 export const refreshThumbnails    = (t: string, guildId: string) =>
