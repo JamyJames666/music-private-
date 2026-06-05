@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
+import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight, Lock } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip,
+  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -246,6 +246,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const [status,         setStatus]         = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
   const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'bulk' | 'settings'>('player')
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false)
+  const [showSettingsPw,   setShowSettingsPw]   = useState(false)
+  const [settingsPw,       setSettingsPw]       = useState('')
+  const [settingsPwError,  setSettingsPwError]  = useState('')
+  const [settingsPwLoading, setSettingsPwLoading] = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('muse_theme') as 'dark' | 'light') ?? 'dark',
@@ -384,7 +389,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
           {/* Settings gear */}
           <button
-            onClick={() => setView(v => v === 'settings' ? 'player' : 'settings')}
+            onClick={() => {
+              if (view === 'settings') { setView('player'); return }
+              if (settingsUnlocked) { setView('settings'); return }
+              setShowSettingsPw(true)
+            }}
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
             style={view === 'settings'
               ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
@@ -505,6 +514,58 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             />
           </div>
 
+        </div>
+      )}
+
+      {/* Settings password modal */}
+      {showSettingsPw && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowSettingsPw(false); setSettingsPw(''); setSettingsPwError('') } }}>
+          <div className="card p-6 w-full max-w-sm space-y-4 mx-4">
+            <div className="flex items-center gap-2">
+              <Lock size={16} style={{ color: '#a855f7' }} />
+              <h2 className="text-sm font-semibold text-white">Superadmin access</h2>
+            </div>
+            <p className="text-xs" style={{ color: '#666' }}>
+              Enter the bulk import password to access settings.
+            </p>
+            <form onSubmit={async (e: FormEvent) => {
+              e.preventDefault()
+              setSettingsPwLoading(true)
+              setSettingsPwError('')
+              try {
+                await bulkLogin(settingsPw)
+                setSettingsUnlocked(true)
+                setShowSettingsPw(false)
+                setSettingsPw('')
+                setView('settings')
+              } catch {
+                setSettingsPwError('Incorrect password.')
+              } finally {
+                setSettingsPwLoading(false)
+              }
+            }} className="space-y-3">
+              <input
+                type="password"
+                autoFocus
+                className="input w-full"
+                placeholder="Bulk import password"
+                value={settingsPw}
+                onChange={e => setSettingsPw(e.target.value)}
+              />
+              {settingsPwError && (
+                <p className="text-xs text-app-danger">{settingsPwError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={settingsPwLoading || !settingsPw}
+                className="btn-primary w-full py-2 text-sm"
+              >
+                {settingsPwLoading ? 'Checking…' : 'Unlock'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>
