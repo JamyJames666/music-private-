@@ -18,9 +18,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Shuffle, GripVertical, X, Music, Trash2, ListMusic,
-  ChevronsUp, Search, ListPlus,
+  ChevronsUp, Search, ListPlus, LogOut,
 } from 'lucide-react'
-import { shuffle, clearQueue, move, remove, flushPending, type TrackInfo } from '@/lib/api'
+import { shuffle, clearQueue, move, remove, flushPending, disconnect, type TrackInfo } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 // fmtDuration kept for compatibility
 const _fmtDuration = fmtTime; void _fmtDuration
@@ -242,8 +242,9 @@ export default function QueueCard({
     }
   }, [displayQueue, token, guildId, onRefresh])
 
-  const handleShuffle    = async () => { await shuffle(token, guildId).catch(() => null); onRefresh() }
-  const handleClearQueue = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
+  const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh() }
+  const handleClearQueue   = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
+  const handleDisconnect   = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
 
   const handleRemove = async (originalIndex: number) => {
     setOptimisticQueue(displayQueue.filter((_, i) => i !== originalIndex))
@@ -332,6 +333,15 @@ export default function QueueCard({
           disabled={displayQueue.length === 0}
         >
           <Trash2 size={12} /> Clear
+        </button>
+        <button
+          className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+          onClick={handleDisconnect}
+          title="Disconnect (queue preserved for 5 min)"
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f97316' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '' }}
+        >
+          <LogOut size={12} /> Disconnect
         </button>
       </div>
 

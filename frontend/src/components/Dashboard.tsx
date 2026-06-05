@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight, Lock } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin,
+  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, joinChannel,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -587,6 +587,33 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   onChannelChange={handlePrimaryChannelChange}
                   onRefresh={poll}
                 />
+
+                {/* Channel switcher */}
+                {primaryChannels.length > 0 && (
+                  <div className="card p-4 space-y-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#888' }}>
+                      Switch channel
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      {primaryChannels.map(c => {
+                        const active = status?.activeChannelIds?.includes(c.id)
+                        return (
+                          <button
+                            key={c.id}
+                            onClick={() => joinChannel(token, primaryGuildId, c.id).then(poll).catch(() => null)}
+                            className="text-xs px-3 py-1.5 rounded-lg border transition-all"
+                            style={active
+                              ? { background: 'rgba(168,85,247,0.15)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)' }
+                              : { background: 'transparent', color: '#666', borderColor: '#333' }}
+                          >
+                            🔊 {c.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <BotSettings token={token} guildId={primaryGuildId} />
               </div>
             </div>
