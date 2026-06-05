@@ -296,7 +296,42 @@ export default class WebServer {
       }
     });
 
-    this.app.post('/api/guilds/:guildId/play', auth, async (req: express.Request, res: express.Response) => {
+    this.app.get('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
+      const settings = await getGuildSettings(req.params.guildId);
+      res.json({open: settings.songRequestsOpen ?? true});
+    });
+
+    this.app.post('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
+      const {open} = req.body as {open?: boolean};
+      if (typeof open !== 'boolean') {
+        res.status(400).json({error: 'open (boolean) is required'});
+        return;
+      }
+
+      try {
+        await prisma.setting.upsert({
+          where: {guildId: req.params.guildId},
+          create: {guildId: req.params.guildId, songRequestsOpen: open},
+          update: {songRequestsOpen: open},
+        });
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    // Play endpoint: admin token always allowed; when songRequestsOpen is true,
+    // unauthenticated requests are also allowed (anyone with the URL can queue songs).
+    this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {
+      const header = req.headers.authorization ?? '';
+      const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (!this.verifyToken(token)) {
+        const settings = await getGuildSettings(req.params.guildId);
+        if (!(settings.songRequestsOpen ?? true)) {
+          res.status(401).json({error: 'Unauthorized'});
+          return;
+        }
+      }
       const {query, channelId} = req.body as {query?: string; channelId?: string};
       if (!query) {
         res.status(400).json({error: 'query is required'});

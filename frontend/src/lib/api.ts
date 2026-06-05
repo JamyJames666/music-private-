@@ -142,3 +142,8 @@ export const bulkLogin  = (password: string) =>
   req<{bulkToken: string}>('POST', '/api/bulk-login', '', {password})
 export const bulkImport = (t: string, guildId: string, queries: string[], channelId: string, bulkToken: string) =>
   req<{ok: boolean; added: number}>('POST', `/api/guilds/${guildId}/queue/bulk-import`, t, {queries, channelId, bulkToken})
+
+export const getSongRequestSetting = (t: string, guildId: string) =>
+  req<{open: boolean}>('GET', `/api/guilds/${guildId}/settings/song-requests`, t)
+export const setSongRequestSetting = (t: string, guildId: string, open: boolean) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/song-requests`, t, {open})

@@ -35,6 +35,7 @@ model Setting {
   turnDownVolumeWhenPeopleSpeak       Boolean  @default(false)
   turnDownVolumeWhenPeopleSpeakTarget Int      @default(20)
   announcementChannelId               String?
+  songRequestsOpen                    Boolean  @default(true)
   createdAt                           DateTime @default(now())
   updatedAt                           DateTime @updatedAt
 }

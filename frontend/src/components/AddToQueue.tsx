@@ -10,12 +10,19 @@ interface Props {
   channelId: string
   onChannelChange: (id: string) => void
   onRefresh: () => void
+  syncGuildId?: string
+  syncChannelId?: string
+  syncGuildName?: string
 }
 
-export default function AddToQueue({ token, guildId, channels, channelId, onChannelChange, onRefresh }: Props) {
+export default function AddToQueue({
+  token, guildId, channels, channelId, onChannelChange, onRefresh,
+  syncGuildId, syncChannelId, syncGuildName,
+}: Props) {
   const [query,   setQuery]   = useState('')
   const [loading, setLoading] = useState(false)
   const [status,  setStatus]  = useState<{ ok: boolean; msg: string } | null>(null)
+  const [sync,    setSync]    = useState(true)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -29,6 +36,12 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
       const res = await play(token, guildId, q, channelId || undefined)
       const pendingMsg = (res.pending ?? 0) > 0 ? ` · ${res.pending} lazy` : ''
       setStatus({ ok: true, msg: `Added ${res.added} songs (${res.queued ?? res.added} queued${pendingMsg}) — ${res.first}` })
+
+      // Mirror to secondary guild if sync is on
+      if (sync && syncGuildId && syncChannelId) {
+        play(token, syncGuildId, q, syncChannelId).catch(() => null)
+      }
+
       setQuery('')
       setTimeout(() => setStatus(null), 4000)
       onRefresh()
@@ -83,6 +96,25 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
           {loading ? 'Adding…' : 'Add'}
         </button>
       </form>
+
+      {/* Sync to secondary guild */}
+      {syncGuildId && (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+          <input type="checkbox" className="sr-only" checked={sync} onChange={e => setSync(e.target.checked)} />
+          <span className={cn(
+            'relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200',
+            sync ? 'bg-app-accent' : 'bg-app-border',
+          )}>
+            <span className={cn(
+              'inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200',
+              sync ? 'translate-x-[18px]' : 'translate-x-[3px]',
+            )} />
+          </span>
+          <span className="text-xs" style={{ color: '#aaa' }}>
+            Also add to {syncGuildName ?? 'server 2'}
+          </span>
+        </label>
+      )}
 
       {status && (
         <p className={cn('text-xs animate-fade-up', status.ok ? 'text-app-muted' : 'text-app-danger')}>

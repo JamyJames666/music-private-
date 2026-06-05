@@ -1,0 +1,1 @@
+ALTER TABLE "Setting" ADD COLUMN "songRequestsOpen" BOOLEAN NOT NULL DEFAULT 1;
