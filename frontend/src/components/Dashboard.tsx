@@ -1,18 +1,13 @@
-import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
-import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight, Lock } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronDown, Sun, Moon, Plus, X, ChevronRight } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin,
+  getGuilds, getChannels, getStatus, pause, resume, skip,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
 import AddToQueue from './AddToQueue'
-import BotSettings from './BotSettings'
-import DjDeckV3 from './DjDeckV3'
-import AutoDj from './AutoDj'
-import BulkImport from './BulkImport'
-import Settings from './Settings'
 
 interface Props {
   token: string
@@ -155,13 +150,11 @@ const MAX_GUILDS = 2
 interface GuildSelectorProps {
   guilds: Guild[]
   selectedIds: string[]
-  adminUnlocked: boolean
   onAdd: (id: string) => void
   onRemove: (id: string) => void
-  onNeedAuth: () => void
 }
 
-function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, onNeedAuth }: GuildSelectorProps) {
+function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -176,16 +169,6 @@ function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, on
   const available = guilds.filter(g => !selectedIds.includes(g.id))
   const atMax = selectedIds.length >= MAX_GUILDS
 
-  const handleAddClick = () => {
-    if (!adminUnlocked) { onNeedAuth(); return }
-    setOpen(o => !o)
-  }
-
-  const handleRemove = (id: string) => {
-    if (!adminUnlocked) { onNeedAuth(); return }
-    onRemove(id)
-  }
-
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {selectedIds.map(id => {
@@ -194,8 +177,8 @@ function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, on
           <span key={id} className="flex items-center gap-1.5 text-sm pl-3 pr-2 py-1.5 rounded-xl border border-app-border"
             style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc' }}>
             {g?.name ?? id}
-            <button onClick={() => handleRemove(id)} className="hover:text-white transition-colors ml-0.5" title={adminUnlocked ? 'Remove server' : 'Admin only'}>
-              {adminUnlocked ? <X size={12} /> : <Lock size={10} />}
+            <button onClick={() => onRemove(id)} className="hover:text-white transition-colors ml-0.5">
+              <X size={12} />
             </button>
           </span>
         )
@@ -204,13 +187,11 @@ function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, on
       {!atMax && (
         <div className="relative" ref={ref}>
           <button
-            onClick={handleAddClick}
+            onClick={() => setOpen(o => !o)}
             className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-app-border text-app-muted hover:text-white hover:border-app-muted/50 transition-colors"
             style={{ background: 'transparent' }}
-            title={adminUnlocked ? 'Add server' : 'Admin only'}
           >
-            {adminUnlocked ? <Plus size={12} /> : <Lock size={11} />}
-            Add server
+            <Plus size={12} /> Add server
           </button>
           {open && available.length > 0 && (
             <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-xl border border-app-border overflow-hidden"
@@ -259,16 +240,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
   const [status,         setStatus]         = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
-  const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'admin'>('player')
-
-  // Admin unlock — bulkToken stored in localStorage (never the raw password)
-  const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
-  const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(localStorage.getItem('muse_admin_token')))
-  const [showAdminPw,   setShowAdminPw]   = useState(false)
-  const [adminPw,       setAdminPw]       = useState('')
-  const [adminPwError,  setAdminPwError]  = useState('')
-  const [adminPwLoading, setAdminPwLoading] = useState(false)
-  const [rememberMe,    setRememberMe]    = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('muse_theme') as 'dark' | 'light') ?? 'dark',
@@ -368,7 +339,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     localStorage.setItem(`muse_channel_${secondaryGuildId}`, id)
   }
 
-  const primaryGuild   = guilds.find(g => g.id === primaryGuildId)
   const secondaryGuild = guilds.find(g => g.id === secondaryGuildId)
 
   return (
@@ -379,47 +349,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <div className="flex items-center gap-2.5 mr-auto">
             <JammyLogo playing={status?.status === 'PLAYING'} />
             <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
-            <button
-              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
-              title="Admin panel"
-              className="ml-1 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-              style={view === 'admin'
-                ? { background: 'rgba(168,85,247,0.25)', color: '#a855f7' }
-                : { background: 'transparent', color: '#444' }}
-              onMouseEnter={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#a855f7' }}
-              onMouseLeave={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#444' }}
-            >
-              <ListPlus size={15} />
-            </button>
           </div>
-
-          {status?.hasBulkImport && (
-            <button
-              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all border"
-              style={view === 'admin'
-                ? { background: 'rgba(168,85,247,0.2)', color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)' }
-                : { background: 'transparent', color: '#666', borderColor: '#333' }}
-            >
-              <ListPlus size={13} /> Admin
-            </button>
-          )}
-
-          {/* Settings gear */}
-          <button
-            onClick={() => {
-              if (view === 'admin') { setView('player'); return }
-              if (adminUnlocked) { setView('admin'); return }
-              setShowAdminPw(true)
-            }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
-            style={view === 'admin'
-              ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
-              : { color: '#888', background: 'transparent' }}
-            title="Superadmin settings"
-          >
-            <SettingsIcon size={14} />
-          </button>
 
           <button
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
@@ -434,257 +364,83 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <GuildSelector
             guilds={guilds}
             selectedIds={selectedGuildIds}
-            adminUnlocked={adminUnlocked}
             onAdd={addGuild}
             onRemove={removeGuild}
-            onNeedAuth={() => setShowAdminPw(true)}
           />
         </div>
       </header>
 
-      {view === 'admin' ? (
-        adminUnlocked ? (
-          <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <SettingsIcon size={18} style={{ color: '#a855f7' }} />
-                <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
-                  {primaryGuild?.name ?? primaryGuildId}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setAdminUnlocked(false)
-                  setAdminToken(null)
-                  localStorage.removeItem('muse_admin_token')
-                  setView('player')
-                }}
-                className="text-xs px-3 py-1.5 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
-              >
-                Sign out
-              </button>
+      <div className="relative flex overflow-hidden" style={{ height: 'calc(100vh - 53px)' }}>
+
+        {status?.nowPlaying?.thumbnailUrl && (
+          <div
+            key={status.nowPlaying.thumbnailUrl}
+            className="absolute inset-0 pointer-events-none animate-fade-in"
+            style={{
+              backgroundImage:    `url(${status.nowPlaying.thumbnailUrl})`,
+              backgroundSize:     'cover',
+              backgroundPosition: 'center',
+              filter:             'blur(80px) saturate(2.2) brightness(1.3)',
+              opacity:            0.32,
+              transform:          'scale(1.1)',
+              zIndex:             0,
+            }}
+          />
+        )}
+
+        {/* Left: Now Playing + Add to Queue */}
+        <div className="w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
+          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{
+              top: 40, width: 420, height: 420,
+              background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, rgba(99,102,241,0.10) 45%, transparent 70%)',
+              filter: 'blur(60px)',
+              borderRadius: '50%',
+              zIndex: 0,
+            }} />
+          <div className="relative z-10 flex flex-col h-full overflow-y-auto">
+            <div className="px-8 pt-6 pb-4">
+              <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
             </div>
-
-            {/* Settings section */}
-            <Settings token={token} guildId={primaryGuildId} guildName={primaryGuild?.name ?? ''} />
-
-            {/* Divider */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
-
-            {/* Bulk Import section */}
-            <BulkImport
-              token={token}
-              guildId={primaryGuildId}
-              channels={primaryChannels}
-              channelId={primaryChannelId}
-              onChannelChange={handlePrimaryChannelChange}
-              onRefresh={poll}
-              externalBulkToken={adminToken ?? undefined}
-            />
-          </div>
-        ) : (
-          // Not yet unlocked — show password prompt inline
-          <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
-                style={{ background: 'rgba(168,85,247,0.15)' }}>
-                <Lock size={20} style={{ color: '#a855f7' }} />
-              </div>
-              <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-              <p className="text-sm" style={{ color: '#666' }}>Enter the admin password to continue.</p>
-            </div>
-            <form onSubmit={async (e: FormEvent) => {
-              e.preventDefault()
-              setAdminPwLoading(true)
-              setAdminPwError('')
-              try {
-                const { bulkToken: bt } = await bulkLogin(adminPw)
-                setAdminToken(bt)
-                setAdminUnlocked(true)
-                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
-                setAdminPw('')
-              } catch {
-                setAdminPwError('Incorrect password.')
-              } finally {
-                setAdminPwLoading(false)
-              }
-            }} className="space-y-3">
-              <input
-                type="password"
-                autoFocus
-                className="input w-full"
-                placeholder="Password"
-                value={adminPw}
-                onChange={e => setAdminPw(e.target.value)}
+            <div className="flex flex-col gap-3 px-8 pb-6">
+              <AddToQueue
+                token={token}
+                guildId={primaryGuildId}
+                channels={primaryChannels}
+                channelId={primaryChannelId}
+                onChannelChange={handlePrimaryChannelChange}
+                onRefresh={poll}
               />
-              {adminPwError && <p className="text-xs text-app-danger">{adminPwError}</p>}
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="sr-only"
-                />
-                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-                </span>
-                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
-              </label>
-              <button
-                type="submit"
-                disabled={adminPwLoading || !adminPw}
-                className="btn-primary w-full py-2.5"
-              >
-                {adminPwLoading ? 'Checking…' : 'Unlock'}
-              </button>
-            </form>
+            </div>
           </div>
-        )
-      ) : view === 'dj' ? (
-        <DjDeckV3 status={status} token={token} guildId={primaryGuildId} onRefresh={poll} />
-      ) : view === 'autodj' ? (
-        <AutoDj status={status} token={token} guildId={primaryGuildId} onRefresh={poll} />
-      ) : (
-        <div className="relative flex overflow-hidden" style={{ height: 'calc(100vh - 53px)' }}>
+        </div>
 
-          {status?.nowPlaying?.thumbnailUrl && (
-            <div
-              key={status.nowPlaying.thumbnailUrl}
-              className="absolute inset-0 pointer-events-none animate-fade-in"
-              style={{
-                backgroundImage:    `url(${status.nowPlaying.thumbnailUrl})`,
-                backgroundSize:     'cover',
-                backgroundPosition: 'center',
-                filter:             'blur(80px) saturate(2.2) brightness(1.3)',
-                opacity:            0.32,
-                transform:          'scale(1.1)',
-                zIndex:             0,
-              }}
+        {/* Right: Queue + optional secondary guild card */}
+        <div className="w-1/2 flex flex-col overflow-hidden" style={{ zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
+          {secondaryGuildId && secondaryGuild && (
+            <SecondaryGuildCard
+              token={token}
+              guildId={secondaryGuildId}
+              guildName={secondaryGuild.name}
+              channels={secondaryChannels}
+              channelId={secondaryChannelId}
+              onChannelChange={handleSecondaryChannelChange}
+              onRemove={() => removeGuild(secondaryGuildId)}
             />
           )}
-
-          {/* Left: Now Playing */}
-          <div className="w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
-            <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-              style={{
-                top: 40, width: 420, height: 420,
-                background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, rgba(99,102,241,0.10) 45%, transparent 70%)',
-                filter: 'blur(60px)',
-                borderRadius: '50%',
-                zIndex: 0,
-              }} />
-            <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className="px-8 pt-6 pb-4">
-                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
-              </div>
-              <div className="flex flex-col gap-3 px-8 pb-6">
-                <AddToQueue
-                  token={token}
-                  guildId={primaryGuildId}
-                  channels={primaryChannels}
-                  channelId={primaryChannelId}
-                  onChannelChange={handlePrimaryChannelChange}
-                  onRefresh={poll}
-                />
-                <BotSettings token={token} guildId={primaryGuildId} />
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Queue + optional secondary guild card */}
-          <div className="w-1/2 flex flex-col overflow-hidden" style={{ zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
-            {secondaryGuildId && secondaryGuild && (
-              <SecondaryGuildCard
-                token={token}
-                guildId={secondaryGuildId}
-                guildName={secondaryGuild.name}
-                channels={secondaryChannels}
-                channelId={secondaryChannelId}
-                onChannelChange={handleSecondaryChannelChange}
-                onRemove={() => removeGuild(secondaryGuildId)}
-              />
-            )}
-            <QueueCard
-              queue={status?.queue ?? []}
-              token={token}
-              guildId={primaryGuildId}
-              onRefresh={poll}
-              pendingCount={status?.pendingCount ?? 0}
-              nowPlaying={status?.nowPlaying ?? null}
-              position={smoothPosition}
-              isPlaying={status?.status === 'PLAYING'}
-            />
-          </div>
-
+          <QueueCard
+            queue={status?.queue ?? []}
+            token={token}
+            guildId={primaryGuildId}
+            onRefresh={poll}
+            pendingCount={status?.pendingCount ?? 0}
+            nowPlaying={status?.nowPlaying ?? null}
+            position={smoothPosition}
+            isPlaying={status?.status === 'PLAYING'}
+          />
         </div>
-      )}
 
-      {/* Admin password modal — triggered from settings gear when not yet unlocked */}
-      {showAdminPw && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowAdminPw(false); setAdminPw(''); setAdminPwError('') } }}>
-          <div className="card p-6 w-full max-w-sm space-y-4 mx-4">
-            <div className="flex items-center gap-2">
-              <Lock size={16} style={{ color: '#a855f7' }} />
-              <h2 className="text-sm font-semibold text-white">Admin Panel</h2>
-            </div>
-            <p className="text-xs" style={{ color: '#666' }}>
-              Enter the admin password to access settings and bulk import.
-            </p>
-            <form onSubmit={async (e: FormEvent) => {
-              e.preventDefault()
-              setAdminPwLoading(true)
-              setAdminPwError('')
-              try {
-                const { bulkToken: bt } = await bulkLogin(adminPw)
-                setAdminToken(bt)
-                setAdminUnlocked(true)
-                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
-                setShowAdminPw(false)
-                setAdminPw('')
-                setView('admin')
-              } catch {
-                setAdminPwError('Incorrect password.')
-              } finally {
-                setAdminPwLoading(false)
-              }
-            }} className="space-y-3">
-              <input
-                type="password"
-                autoFocus
-                className="input w-full"
-                placeholder="Password"
-                value={adminPw}
-                onChange={e => setAdminPw(e.target.value)}
-              />
-              {adminPwError && (
-                <p className="text-xs text-app-danger">{adminPwError}</p>
-              )}
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="sr-only"
-                />
-                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-                </span>
-                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
-              </label>
-              <button
-                type="submit"
-                disabled={adminPwLoading || !adminPw}
-                className="btn-primary w-full py-2 text-sm"
-              >
-                {adminPwLoading ? 'Checking…' : 'Unlock'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
