@@ -245,12 +245,16 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
   const [status,         setStatus]         = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
-  const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'bulk' | 'settings'>('player')
-  const [settingsUnlocked, setSettingsUnlocked] = useState(false)
-  const [showSettingsPw,   setShowSettingsPw]   = useState(false)
-  const [settingsPw,       setSettingsPw]       = useState('')
-  const [settingsPwError,  setSettingsPwError]  = useState('')
-  const [settingsPwLoading, setSettingsPwLoading] = useState(false)
+  const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'admin'>('player')
+
+  // Admin unlock — bulkToken stored in localStorage (never the raw password)
+  const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
+  const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(localStorage.getItem('muse_admin_token')))
+  const [showAdminPw,   setShowAdminPw]   = useState(false)
+  const [adminPw,       setAdminPw]       = useState('')
+  const [adminPwError,  setAdminPwError]  = useState('')
+  const [adminPwLoading, setAdminPwLoading] = useState(false)
+  const [rememberMe,    setRememberMe]    = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('muse_theme') as 'dark' | 'light') ?? 'dark',
@@ -362,14 +366,14 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             <JammyLogo playing={status?.status === 'PLAYING'} />
             <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
             <button
-              onClick={() => setView(v => v === 'bulk' ? 'player' : 'bulk')}
-              title="Bulk Import songs"
+              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
+              title="Admin panel"
               className="ml-1 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-              style={view === 'bulk'
+              style={view === 'admin'
                 ? { background: 'rgba(168,85,247,0.25)', color: '#a855f7' }
                 : { background: 'transparent', color: '#444' }}
-              onMouseEnter={e => { if (view !== 'bulk') (e.currentTarget as HTMLElement).style.color = '#a855f7' }}
-              onMouseLeave={e => { if (view !== 'bulk') (e.currentTarget as HTMLElement).style.color = '#444' }}
+              onMouseEnter={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#a855f7' }}
+              onMouseLeave={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#444' }}
             >
               <ListPlus size={15} />
             </button>
@@ -377,25 +381,25 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
           {status?.hasBulkImport && (
             <button
-              onClick={() => setView(v => v === 'bulk' ? 'player' : 'bulk')}
+              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all border"
-              style={view === 'bulk'
+              style={view === 'admin'
                 ? { background: 'rgba(168,85,247,0.2)', color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)' }
                 : { background: 'transparent', color: '#666', borderColor: '#333' }}
             >
-              <ListPlus size={13} /> Import
+              <ListPlus size={13} /> Admin
             </button>
           )}
 
           {/* Settings gear */}
           <button
             onClick={() => {
-              if (view === 'settings') { setView('player'); return }
-              if (settingsUnlocked) { setView('settings'); return }
-              setShowSettingsPw(true)
+              if (view === 'admin') { setView('player'); return }
+              if (adminUnlocked) { setView('admin'); return }
+              setShowAdminPw(true)
             }}
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
-            style={view === 'settings'
+            style={view === 'admin'
               ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
               : { color: '#888', background: 'transparent' }}
             title="Superadmin settings"
@@ -422,17 +426,105 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
         </div>
       </header>
 
-      {view === 'settings' ? (
-        <Settings token={token} guildId={primaryGuildId} guildName={primaryGuild?.name ?? ''} />
-      ) : view === 'bulk' ? (
-        <BulkImport
-          token={token}
-          guildId={primaryGuildId}
-          channels={primaryChannels}
-          channelId={primaryChannelId}
-          onChannelChange={handlePrimaryChannelChange}
-          onRefresh={poll}
-        />
+      {view === 'admin' ? (
+        adminUnlocked ? (
+          <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <SettingsIcon size={18} style={{ color: '#a855f7' }} />
+                <h1 className="text-lg font-bold text-white">Admin Panel</h1>
+                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
+                  {primaryGuild?.name ?? primaryGuildId}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setAdminUnlocked(false)
+                  setAdminToken(null)
+                  localStorage.removeItem('muse_admin_token')
+                  setView('player')
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+
+            {/* Settings section */}
+            <Settings token={token} guildId={primaryGuildId} guildName={primaryGuild?.name ?? ''} />
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
+            {/* Bulk Import section */}
+            <BulkImport
+              token={token}
+              guildId={primaryGuildId}
+              channels={primaryChannels}
+              channelId={primaryChannelId}
+              onChannelChange={handlePrimaryChannelChange}
+              onRefresh={poll}
+              externalBulkToken={adminToken ?? undefined}
+            />
+          </div>
+        ) : (
+          // Not yet unlocked — show password prompt inline
+          <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
+                style={{ background: 'rgba(168,85,247,0.15)' }}>
+                <Lock size={20} style={{ color: '#a855f7' }} />
+              </div>
+              <h1 className="text-lg font-bold text-white">Admin Panel</h1>
+              <p className="text-sm" style={{ color: '#666' }}>Enter the admin password to continue.</p>
+            </div>
+            <form onSubmit={async (e: FormEvent) => {
+              e.preventDefault()
+              setAdminPwLoading(true)
+              setAdminPwError('')
+              try {
+                const { bulkToken: bt } = await bulkLogin(adminPw)
+                setAdminToken(bt)
+                setAdminUnlocked(true)
+                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
+                setAdminPw('')
+              } catch {
+                setAdminPwError('Incorrect password.')
+              } finally {
+                setAdminPwLoading(false)
+              }
+            }} className="space-y-3">
+              <input
+                type="password"
+                autoFocus
+                className="input w-full"
+                placeholder="Password"
+                value={adminPw}
+                onChange={e => setAdminPw(e.target.value)}
+              />
+              {adminPwError && <p className="text-xs text-app-danger">{adminPwError}</p>}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="sr-only"
+                />
+                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                </span>
+                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
+              </label>
+              <button
+                type="submit"
+                disabled={adminPwLoading || !adminPw}
+                className="btn-primary w-full py-2.5"
+              >
+                {adminPwLoading ? 'Checking…' : 'Unlock'}
+              </button>
+            </form>
+          </div>
+        )
       ) : view === 'dj' ? (
         <DjDeckV3 status={status} token={token} guildId={primaryGuildId} onRefresh={poll} />
       ) : view === 'autodj' ? (
@@ -512,52 +604,66 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
         </div>
       )}
 
-      {/* Settings password modal */}
-      {showSettingsPw && (
+      {/* Admin password modal — triggered from settings gear when not yet unlocked */}
+      {showAdminPw && (
         <div className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowSettingsPw(false); setSettingsPw(''); setSettingsPwError('') } }}>
+          onClick={e => { if (e.target === e.currentTarget) { setShowAdminPw(false); setAdminPw(''); setAdminPwError('') } }}>
           <div className="card p-6 w-full max-w-sm space-y-4 mx-4">
             <div className="flex items-center gap-2">
               <Lock size={16} style={{ color: '#a855f7' }} />
-              <h2 className="text-sm font-semibold text-white">Superadmin access</h2>
+              <h2 className="text-sm font-semibold text-white">Admin Panel</h2>
             </div>
             <p className="text-xs" style={{ color: '#666' }}>
-              Enter the bulk import password to access settings.
+              Enter the admin password to access settings and bulk import.
             </p>
             <form onSubmit={async (e: FormEvent) => {
               e.preventDefault()
-              setSettingsPwLoading(true)
-              setSettingsPwError('')
+              setAdminPwLoading(true)
+              setAdminPwError('')
               try {
-                await bulkLogin(settingsPw)
-                setSettingsUnlocked(true)
-                setShowSettingsPw(false)
-                setSettingsPw('')
-                setView('settings')
+                const { bulkToken: bt } = await bulkLogin(adminPw)
+                setAdminToken(bt)
+                setAdminUnlocked(true)
+                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
+                setShowAdminPw(false)
+                setAdminPw('')
+                setView('admin')
               } catch {
-                setSettingsPwError('Incorrect password.')
+                setAdminPwError('Incorrect password.')
               } finally {
-                setSettingsPwLoading(false)
+                setAdminPwLoading(false)
               }
             }} className="space-y-3">
               <input
                 type="password"
                 autoFocus
                 className="input w-full"
-                placeholder="Bulk import password"
-                value={settingsPw}
-                onChange={e => setSettingsPw(e.target.value)}
+                placeholder="Password"
+                value={adminPw}
+                onChange={e => setAdminPw(e.target.value)}
               />
-              {settingsPwError && (
-                <p className="text-xs text-app-danger">{settingsPwError}</p>
+              {adminPwError && (
+                <p className="text-xs text-app-danger">{adminPwError}</p>
               )}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="sr-only"
+                />
+                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                </span>
+                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
+              </label>
               <button
                 type="submit"
-                disabled={settingsPwLoading || !settingsPw}
+                disabled={adminPwLoading || !adminPw}
                 className="btn-primary w-full py-2 text-sm"
               >
-                {settingsPwLoading ? 'Checking…' : 'Unlock'}
+                {adminPwLoading ? 'Checking…' : 'Unlock'}
               </button>
             </form>
           </div>

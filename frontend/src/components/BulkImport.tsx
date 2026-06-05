@@ -10,6 +10,7 @@ interface Props {
   channelId: string
   onChannelChange: (id: string) => void
   onRefresh: () => void
+  externalBulkToken?: string  // when set, skips the internal login screen
 }
 
 function parseLine(line: string): string | null {
@@ -23,16 +24,22 @@ function parseLine(line: string): string | null {
   return `${titlePart} ${artists}`
 }
 
-export default function BulkImport({ token, guildId, channels, channelId, onChannelChange, onRefresh }: Props) {
+export default function BulkImport({ token, guildId, channels, channelId, onChannelChange, onRefresh, externalBulkToken }: Props) {
   const [password,    setPassword]   = useState('')
-  const [bulkToken,   setBulkToken]  = useState<string | null>(() => sessionStorage.getItem('bulk_token'))
+  const [bulkToken,   setBulkToken]  = useState<string | null>(() => externalBulkToken ?? sessionStorage.getItem('bulk_token'))
   const [loginError,  setLoginError] = useState('')
   const [loginBusy,   setLoginBusy]  = useState(false)
   const [serverInfo,  setServerInfo] = useState<{configured: boolean; length: number} | null>(null)
 
+  // Sync external token when it changes (e.g. Dashboard unlocks after mount)
   useEffect(() => {
+    if (externalBulkToken) setBulkToken(externalBulkToken)
+  }, [externalBulkToken])
+
+  useEffect(() => {
+    if (externalBulkToken) return  // server diagnostic only needed in standalone mode
     bulkConfigured().then(setServerInfo).catch(() => null)
-  }, [])
+  }, [externalBulkToken])
 
   const [text,    setText]    = useState('')
   const [loading, setLoading] = useState(false)
@@ -77,9 +84,12 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed'
       if (msg.includes('401') || msg.toLowerCase().includes('token') || msg.toLowerCase().includes('expired')) {
-        // Token expired — force re-login
-        handleLogout()
-        setResult({ ok: false, msg: 'Session expired — please log in again' })
+        if (externalBulkToken) {
+          setResult({ ok: false, msg: 'Session expired — sign out and back in from the admin panel' })
+        } else {
+          handleLogout()
+          setResult({ ok: false, msg: 'Session expired — please log in again' })
+        }
       } else {
         setResult({ ok: false, msg })
       }
@@ -88,8 +98,8 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
     }
   }
 
-  // ── Login screen ──────────────────────────────────────────────────────────
-  if (!bulkToken) {
+  // ── Login screen — only shown in standalone mode (no external token) ────────
+  if (!bulkToken && !externalBulkToken) {
     return (
       <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
         <div className="text-center space-y-2">
@@ -151,9 +161,11 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
             Paste songs one per line — they'll all queue up at once.
           </p>
         </div>
-        <button onClick={handleLogout} className="text-xs" style={{ color: '#555' }}>
-          Log out
-        </button>
+        {!externalBulkToken && (
+          <button onClick={handleLogout} className="text-xs" style={{ color: '#555' }}>
+            Log out
+          </button>
+        )}
       </div>
 
       {/* Channel selector */}
