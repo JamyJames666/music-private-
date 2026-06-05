@@ -467,10 +467,10 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className="flex-1 flex items-center justify-center px-8 py-6 min-h-0">
+              <div className="px-8 pt-6 pb-4">
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
               </div>
-              <div className="flex flex-col gap-3 px-8 pb-6 flex-shrink-0">
+              <div className="flex flex-col gap-3 px-8 pb-6">
                 <AddToQueue
                   token={token}
                   guildId={primaryGuildId}
