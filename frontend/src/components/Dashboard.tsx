@@ -155,11 +155,13 @@ const MAX_GUILDS = 2
 interface GuildSelectorProps {
   guilds: Guild[]
   selectedIds: string[]
+  adminUnlocked: boolean
   onAdd: (id: string) => void
   onRemove: (id: string) => void
+  onNeedAuth: () => void
 }
 
-function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorProps) {
+function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, onNeedAuth }: GuildSelectorProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -174,6 +176,16 @@ function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorPr
   const available = guilds.filter(g => !selectedIds.includes(g.id))
   const atMax = selectedIds.length >= MAX_GUILDS
 
+  const handleAddClick = () => {
+    if (!adminUnlocked) { onNeedAuth(); return }
+    setOpen(o => !o)
+  }
+
+  const handleRemove = (id: string) => {
+    if (!adminUnlocked) { onNeedAuth(); return }
+    onRemove(id)
+  }
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {selectedIds.map(id => {
@@ -182,8 +194,8 @@ function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorPr
           <span key={id} className="flex items-center gap-1.5 text-sm pl-3 pr-2 py-1.5 rounded-xl border border-app-border"
             style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc' }}>
             {g?.name ?? id}
-            <button onClick={() => onRemove(id)} className="hover:text-white transition-colors ml-0.5">
-              <X size={12} />
+            <button onClick={() => handleRemove(id)} className="hover:text-white transition-colors ml-0.5" title={adminUnlocked ? 'Remove server' : 'Admin only'}>
+              {adminUnlocked ? <X size={12} /> : <Lock size={10} />}
             </button>
           </span>
         )
@@ -192,11 +204,13 @@ function GuildSelector({ guilds, selectedIds, onAdd, onRemove }: GuildSelectorPr
       {!atMax && (
         <div className="relative" ref={ref}>
           <button
-            onClick={() => setOpen(o => !o)}
+            onClick={handleAddClick}
             className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-app-border text-app-muted hover:text-white hover:border-app-muted/50 transition-colors"
             style={{ background: 'transparent' }}
+            title={adminUnlocked ? 'Add server' : 'Admin only'}
           >
-            <Plus size={12} /> Add server
+            {adminUnlocked ? <Plus size={12} /> : <Lock size={11} />}
+            Add server
           </button>
           {open && available.length > 0 && (
             <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-xl border border-app-border overflow-hidden"
@@ -420,8 +434,10 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <GuildSelector
             guilds={guilds}
             selectedIds={selectedGuildIds}
+            adminUnlocked={adminUnlocked}
             onAdd={addGuild}
             onRemove={removeGuild}
+            onNeedAuth={() => setShowAdminPw(true)}
           />
         </div>
       </header>
