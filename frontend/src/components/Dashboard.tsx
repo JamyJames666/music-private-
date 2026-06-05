@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
-import { ChevronDown, Sun, Moon, ListPlus, Plus, X, Settings as SettingsIcon, ChevronRight, Lock } from 'lucide-react'
+import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X } from 'lucide-react'
 import {
   getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, moveChannel,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
+import { applyAccent, ACCENT_PRESETS } from './Settings'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
 import AddToQueue from './AddToQueue'
@@ -148,96 +149,7 @@ function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, on
   )
 }
 
-// ── Guild pill selector ───────────────────────────────────────────────────────
-
 const MAX_GUILDS = 2
-
-interface GuildSelectorProps {
-  guilds: Guild[]
-  selectedIds: string[]
-  adminUnlocked: boolean
-  onAdd: (id: string) => void
-  onRemove: (id: string) => void
-  onNeedAuth: () => void
-}
-
-function GuildSelector({ guilds, selectedIds, adminUnlocked, onAdd, onRemove, onNeedAuth }: GuildSelectorProps) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const available = guilds.filter(g => !selectedIds.includes(g.id))
-  const atMax = selectedIds.length >= MAX_GUILDS
-
-  const handleAddClick = () => {
-    if (!adminUnlocked) { onNeedAuth(); return }
-    setOpen(o => !o)
-  }
-
-  const handleRemove = (id: string) => {
-    if (!adminUnlocked) { onNeedAuth(); return }
-    onRemove(id)
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {selectedIds.map(id => {
-        const g = guilds.find(g => g.id === id)
-        return (
-          <span key={id} className="flex items-center gap-1.5 text-sm pl-3 pr-2 py-1.5 rounded-xl border border-app-border"
-            style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc' }}>
-            {g?.name ?? id}
-            <button onClick={() => handleRemove(id)} className="hover:text-white transition-colors ml-0.5" title={adminUnlocked ? 'Remove server' : 'Admin only'}>
-              {adminUnlocked ? <X size={12} /> : <Lock size={10} />}
-            </button>
-          </span>
-        )
-      })}
-
-      {!atMax && (
-        <div className="relative" ref={ref}>
-          <button
-            onClick={handleAddClick}
-            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-app-border text-app-muted hover:text-white hover:border-app-muted/50 transition-colors"
-            style={{ background: 'transparent' }}
-            title={adminUnlocked ? 'Add server' : 'Admin only'}
-          >
-            {adminUnlocked ? <Plus size={12} /> : <Lock size={11} />}
-            Add server
-          </button>
-          {open && available.length > 0 && (
-            <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-xl border border-app-border overflow-hidden"
-              style={{ background: '#141018' }}>
-              {available.map(g => (
-                <button key={g.id} onClick={() => { onAdd(g.id); setOpen(false) }}
-                  className="w-full text-left text-sm px-4 py-2.5 text-app-text hover:bg-app-panel transition-colors">
-                  {g.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {open && available.length === 0 && (
-            <div className="absolute top-full mt-1 right-0 z-50 min-w-[180px] rounded-xl border border-app-border px-4 py-3"
-              style={{ background: '#141018', color: '#666', fontSize: '12px' }}>
-              No other servers available
-            </div>
-          )}
-        </div>
-      )}
-
-      {atMax && (
-        <span className="text-[11px]" style={{ color: '#555' }}>Max {MAX_GUILDS} servers</span>
-      )}
-    </div>
-  )
-}
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 
@@ -277,6 +189,14 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     document.documentElement.classList.toggle('light', theme === 'light')
     localStorage.setItem('muse_theme', theme)
   }, [theme])
+
+  // Apply saved accent colour on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('muse_accent') ?? 'null') as typeof ACCENT_PRESETS[number] | null
+      if (saved?.rgb) applyAccent(saved)
+    } catch { /* use CSS default */ }
+  }, [])
 
   // Load all guilds
   useEffect(() => {
@@ -375,70 +295,28 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     <div className="min-h-screen bg-app-bg">
       <header className="sticky top-0 z-30 backdrop-blur-md px-6 py-3"
         style={{ background: 'rgba(7,6,15,0.75)' }}>
-        <div className="max-w-[1800px] mx-auto flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2.5 mr-auto">
-            <JammyLogo playing={status?.status === 'PLAYING'} />
-            <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
+        <div className="max-w-[1800px] mx-auto flex items-center gap-3">
+          <JammyLogo playing={status?.status === 'PLAYING'} />
+          <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
+          {primaryGuild && (
+            <span className="text-sm" style={{ color: '#555' }}>· {primaryGuild.name}</span>
+          )}
+          <div className="ml-auto">
             <button
-              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
-              title="Admin panel"
-              className="ml-1 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+              onClick={() => {
+                if (view === 'admin') { setView('player'); return }
+                if (adminUnlocked) { setView('admin'); return }
+                setShowAdminPw(true)
+              }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
               style={view === 'admin'
-                ? { background: 'rgba(168,85,247,0.25)', color: '#a855f7' }
-                : { background: 'transparent', color: '#444' }}
-              onMouseEnter={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#a855f7' }}
-              onMouseLeave={e => { if (view !== 'admin') (e.currentTarget as HTMLElement).style.color = '#444' }}
+                ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
+                : { color: '#888', background: 'transparent' }}
+              title="Settings"
             >
-              <ListPlus size={15} />
+              <SettingsIcon size={14} />
             </button>
           </div>
-
-          {status?.hasBulkImport && (
-            <button
-              onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all border"
-              style={view === 'admin'
-                ? { background: 'rgba(168,85,247,0.2)', color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)' }
-                : { background: 'transparent', color: '#666', borderColor: '#333' }}
-            >
-              <ListPlus size={13} /> Admin
-            </button>
-          )}
-
-          {/* Settings gear */}
-          <button
-            onClick={() => {
-              if (view === 'admin') { setView('player'); return }
-              if (adminUnlocked) { setView('admin'); return }
-              setShowAdminPw(true)
-            }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
-            style={view === 'admin'
-              ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
-              : { color: '#888', background: 'transparent' }}
-            title="Superadmin settings"
-          >
-            <SettingsIcon size={14} />
-          </button>
-
-          <button
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
-            style={{ color: '#888' }}
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
-
-          {/* Multi-guild pill selector */}
-          <GuildSelector
-            guilds={guilds}
-            selectedIds={selectedGuildIds}
-            adminUnlocked={adminUnlocked}
-            onAdd={addGuild}
-            onRemove={removeGuild}
-            onNeedAuth={() => setShowAdminPw(true)}
-          />
         </div>
       </header>
 
@@ -467,7 +345,17 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             </div>
 
             {/* Settings section */}
-            <Settings token={token} guildId={primaryGuildId} guildName={primaryGuild?.name ?? ''} />
+            <Settings
+              token={token}
+              guildId={primaryGuildId}
+              guildName={primaryGuild?.name ?? ''}
+              theme={theme}
+              onThemeChange={setTheme}
+              guilds={guilds}
+              selectedIds={selectedGuildIds}
+              onAddGuild={addGuild}
+              onRemoveGuild={removeGuild}
+            />
 
             {/* Divider */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
