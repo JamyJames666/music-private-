@@ -112,6 +112,7 @@ export default class {
   private positionInSeconds = 0;
   private readonly fileCache: FileCacheProvider;
   private disconnectTimer: NodeJS.Timeout | null = null;
+  private pauseDisconnectTimer: NodeJS.Timeout | null = null;
   private emptyChannelTimer: NodeJS.Timeout | null = null;
   private queueClearTimer: NodeJS.Timeout | null = null;
 
@@ -179,9 +180,20 @@ export default class {
   }
 
   disconnect(): void {
+    if (this.pauseDisconnectTimer) {
+      clearTimeout(this.pauseDisconnectTimer);
+      this.pauseDisconnectTimer = null;
+    }
+
     if (this.voiceConnection) {
       if (this.status === STATUS.PLAYING) {
         this.pause();
+      }
+
+      // Pause() may restart the timer — clear it again
+      if (this.pauseDisconnectTimer) {
+        clearTimeout(this.pauseDisconnectTimer);
+        this.pauseDisconnectTimer = null;
       }
 
       this.loopCurrentSong = false;
@@ -323,6 +335,12 @@ export default class {
 
     // Resume from paused state
     if (this.status === STATUS.PAUSED && currentSong.url === this.nowPlaying?.url) {
+      // Clear pause-disconnect timer on resume
+      if (this.pauseDisconnectTimer) {
+        clearTimeout(this.pauseDisconnectTimer);
+        this.pauseDisconnectTimer = null;
+      }
+
       if (this.audioPlayer) {
         this.audioPlayer.unpause();
         this.status = STATUS.PLAYING;
@@ -410,6 +428,19 @@ export default class {
     }
 
     this.stopTrackingPosition();
+
+    // Disconnect after 10 minutes of being paused
+    if (this.pauseDisconnectTimer) {
+      clearTimeout(this.pauseDisconnectTimer);
+    }
+
+    this.pauseDisconnectTimer = setTimeout(() => {
+      if (this.status === STATUS.PAUSED) {
+        this.disconnect();
+      }
+
+      this.pauseDisconnectTimer = null;
+    }, 10 * 60 * 1000);
   }
 
   async forward(skip: number): Promise<void> {

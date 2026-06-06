@@ -298,7 +298,7 @@ export default class WebServer {
 
     this.app.get('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
       const settings = await getGuildSettings(req.params.guildId);
-      res.json({open: settings.songRequestsOpen ?? true});
+      res.json({open: (settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true});
     });
 
     this.app.post('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
@@ -332,6 +332,7 @@ export default class WebServer {
           return;
         }
       }
+
       const {query, channelId} = req.body as {query?: string; channelId?: string};
       if (!query) {
         res.status(400).json({error: 'query is required'});

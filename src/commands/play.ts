@@ -60,7 +60,7 @@ export default class implements Command {
     // Skip if it's a URL or the user already included "lyrics".
     let query = rawQuery;
     try {
-      new URL(rawQuery);
+      void new URL(rawQuery);
     } catch {
       if (!rawQuery.toLowerCase().includes('lyrics')) {
         query = `${rawQuery} lyrics`;
