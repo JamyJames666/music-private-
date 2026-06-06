@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Lock, Sun, Moon, Plus, X } from 'lucide-react'
+import { Users, Lock, Sun, Moon, Plus, X, Star } from 'lucide-react'
 import { getSongRequestSetting, setSongRequestSetting, type Guild } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -28,11 +28,12 @@ interface Props {
   selectedIds: string[]
   onAddGuild: (id: string) => void
   onRemoveGuild: (id: string) => void
+  onSetPrimary: (id: string) => void
 }
 
 export { applyAccent, ACCENT_PRESETS }
 
-export default function Settings({ token, guildId, guildName, theme, onThemeChange, guilds, selectedIds, onAddGuild, onRemoveGuild }: Props) {
+export default function Settings({ token, guildId, guildName, theme, onThemeChange, guilds, selectedIds, onAddGuild, onRemoveGuild, onSetPrimary }: Props) {
   const [songRequestsOpen, setSongRequestsOpen] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -146,13 +147,22 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                   )}
                 </div>
                 {!isPrimary && (
-                  <button
-                    onClick={() => onRemoveGuild(id)}
-                    className="text-app-muted hover:text-app-danger transition-colors"
-                    title="Remove server"
-                  >
-                    <X size={14} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onSetPrimary(id)}
+                      className="text-app-muted hover:text-app-accent transition-colors"
+                      title="Make primary"
+                    >
+                      <Star size={13} />
+                    </button>
+                    <button
+                      onClick={() => onRemoveGuild(id)}
+                      className="text-app-muted hover:text-app-danger transition-colors"
+                      title="Remove server"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 )}
               </div>
             )

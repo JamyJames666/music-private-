@@ -272,7 +272,13 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
   const removeGuild = (id: string) => {
     const next = selectedGuildIds.filter(g => g !== id)
-    // If removing the primary, promote secondary
+    setSelectedGuildIds(next)
+    localStorage.setItem('muse_guilds', JSON.stringify(next))
+    setStatus(null)
+  }
+
+  const setPrimaryGuild = (id: string) => {
+    const next = [id, ...selectedGuildIds.filter(g => g !== id)].slice(0, MAX_GUILDS)
     setSelectedGuildIds(next)
     localStorage.setItem('muse_guilds', JSON.stringify(next))
     setStatus(null)
@@ -355,6 +361,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               selectedIds={selectedGuildIds}
               onAddGuild={addGuild}
               onRemoveGuild={removeGuild}
+              onSetPrimary={setPrimaryGuild}
             />
 
             {/* Divider */}
