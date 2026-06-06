@@ -79,7 +79,7 @@ export default class {
           }
 
           const guildSettings = await getGuildSettings(interaction.guild.id);
-          if ((guildSettings as unknown as {adminOnlyCommands?: boolean}).adminOnlyCommands) {
+          if (guildSettings.adminOnlyCommands) {
             await interaction.reply({content: '🔒 Bot commands are disabled — use the web dashboard to control the bot.', ephemeral: true});
             return;
           }

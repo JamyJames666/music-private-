@@ -298,7 +298,7 @@ export default class WebServer {
 
     this.app.get('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
       const settings = await getGuildSettings(req.params.guildId);
-      res.json({open: (settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true});
+      res.json({open: settings.songRequestsOpen ?? true});
     });
 
     this.app.post('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
@@ -322,7 +322,7 @@ export default class WebServer {
 
     this.app.get('/api/guilds/:guildId/settings/admin-only-commands', auth, async (req: express.Request, res: express.Response) => {
       const settings = await getGuildSettings(req.params.guildId);
-      res.json({adminOnly: (settings as unknown as {adminOnlyCommands?: boolean}).adminOnlyCommands ?? false});
+      res.json({adminOnly: settings.adminOnlyCommands ?? false});
     });
 
     this.app.post('/api/guilds/:guildId/settings/admin-only-commands', auth, async (req: express.Request, res: express.Response) => {
@@ -351,7 +351,7 @@ export default class WebServer {
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
       if (!this.verifyToken(token)) {
         const settings = await getGuildSettings(req.params.guildId);
-        if (!(settings.songRequestsOpen ?? true)) {
+        if (settings.adminOnlyCommands || !(settings.songRequestsOpen ?? true)) {
           res.status(401).json({error: 'Unauthorized'});
           return;
         }
