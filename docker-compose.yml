@@ -13,6 +13,7 @@ services:
       - BULK_ADD_PASSWORD=${BULK_ADD_PASSWORD}
       - DISABLE_WEB_ANNOUNCEMENTS=${DISABLE_WEB_ANNOUNCEMENTS}
       - WEB_ONLY_MODE=${WEB_ONLY_MODE}
+      - ADMIN_ONLY=${ADMIN_ONLY}
     expose:
       - "4000"
     volumes:

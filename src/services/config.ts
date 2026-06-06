@@ -33,6 +33,7 @@ const CONFIG_MAP = {
   WEB_PASSWORD: process.env.WEB_PASSWORD ?? '',
   WEB_PORT: parseInt(process.env.WEB_PORT ?? '4000', 10),
   WEB_ONLY_MODE: process.env.WEB_ONLY_MODE === 'true',
+  ADMIN_ONLY: process.env.ADMIN_ONLY === 'true',
   DISABLE_WEB_ANNOUNCEMENTS: process.env.DISABLE_WEB_ANNOUNCEMENTS === 'true',
   // Password for the Bulk Import tab — set to enable the tab, leave empty to hide it.
   BULK_ADD_PASSWORD: process.env.BULK_ADD_PASSWORD ?? '',
@@ -66,6 +67,7 @@ export default class Config {
   readonly WEB_PASSWORD!: string;
   readonly WEB_PORT!: number;
   readonly WEB_ONLY_MODE!: boolean;
+  readonly ADMIN_ONLY!: boolean;
   readonly DISABLE_WEB_ANNOUNCEMENTS!: boolean;
   readonly BULK_ADD_PASSWORD!: string;
 
