@@ -10,7 +10,6 @@ import getYouTubeAndSpotifySuggestionsFor from '../utils/get-youtube-and-spotify
 import KeyValueCacheProvider from '../services/key-value-cache.js';
 import {ONE_HOUR_IN_SECONDS} from '../utils/constants.js';
 import AddQueryToQueue from '../services/add-query-to-queue.js';
-import {getGuildSettings} from '../utils/get-guild-settings.js';
 
 @injectable()
 export default class implements Command {
@@ -54,17 +53,6 @@ export default class implements Command {
   }
 
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    if (interaction.guildId) {
-      const settings = await getGuildSettings(interaction.guildId);
-      if (!((settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true)) {
-        await interaction.reply({
-          content: '🔒 Song requests are set to admin only on this server. Use the web dashboard to queue songs.',
-          ephemeral: true,
-        });
-        return;
-      }
-    }
-
     const rawQuery = interaction.options.getString('query')!.trim();
 
     // For plain-text searches append "lyrics" so YouTube returns the audio/lyrics

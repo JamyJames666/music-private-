@@ -9,6 +9,7 @@ import handleGuildCreate from './events/guild-create.js';
 import handleVoiceStateUpdate from './events/voice-state-update.js';
 import errorMsg from './utils/error-msg.js';
 import {isUserInVoice} from './utils/channels.js';
+import {getGuildSettings} from './utils/get-guild-settings.js';
 import Config from './services/config.js';
 import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
@@ -74,6 +75,12 @@ export default class {
 
           if (!interaction.guild) {
             await interaction.reply(errorMsg('you can\'t use this bot in a DM'));
+            return;
+          }
+
+          const guildSettings = await getGuildSettings(interaction.guild.id);
+          if ((guildSettings as unknown as {adminOnlyCommands?: boolean}).adminOnlyCommands) {
+            await interaction.reply({content: '🔒 Bot commands are disabled — use the web dashboard to control the bot.', ephemeral: true});
             return;
           }
 
