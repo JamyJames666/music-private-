@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Lock, Sun, Moon, Plus, X, Star } from 'lucide-react'
+import { Users, Lock, Sun, Moon, Plus, X } from 'lucide-react'
 import { getSongRequestSetting, setSongRequestSetting, type Guild } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -150,10 +150,12 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onSetPrimary(id)}
-                      className="text-app-muted hover:text-app-accent transition-colors"
-                      title="Make primary"
+                      className="text-xs px-2 py-0.5 rounded border transition-colors"
+                      style={{ borderColor: '#a855f7', color: '#a855f7' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.15)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
-                      <Star size={13} />
+                      Set primary
                     </button>
                     <button
                       onClick={() => onRemoveGuild(id)}
