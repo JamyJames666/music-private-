@@ -150,3 +150,8 @@ export const getSongRequestSetting = (t: string, guildId: string) =>
   req<{open: boolean}>('GET', `/api/guilds/${guildId}/settings/song-requests`, t)
 export const setSongRequestSetting = (t: string, guildId: string, open: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/song-requests`, t, {open})
+
+export const getAdminOnlySetting = (t: string, guildId: string) =>
+  req<{adminOnly: boolean}>('GET', `/api/guilds/${guildId}/settings/admin-only-commands`, t)
+export const setAdminOnlySetting = (t: string, guildId: string, adminOnly: boolean) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/admin-only-commands`, t, {adminOnly})

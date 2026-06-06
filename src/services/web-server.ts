@@ -320,6 +320,30 @@ export default class WebServer {
       }
     });
 
+    this.app.get('/api/guilds/:guildId/settings/admin-only-commands', auth, async (req: express.Request, res: express.Response) => {
+      const settings = await getGuildSettings(req.params.guildId);
+      res.json({adminOnly: (settings as unknown as {adminOnlyCommands?: boolean}).adminOnlyCommands ?? false});
+    });
+
+    this.app.post('/api/guilds/:guildId/settings/admin-only-commands', auth, async (req: express.Request, res: express.Response) => {
+      const {adminOnly} = req.body as {adminOnly?: boolean};
+      if (typeof adminOnly !== 'boolean') {
+        res.status(400).json({error: 'adminOnly (boolean) is required'});
+        return;
+      }
+
+      try {
+        await prisma.setting.upsert({
+          where: {guildId: req.params.guildId},
+          create: {guildId: req.params.guildId, adminOnlyCommands: adminOnly},
+          update: {adminOnlyCommands: adminOnly},
+        });
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
     // Play endpoint: admin token always allowed; when songRequestsOpen is true,
     // unauthenticated requests are also allowed (anyone with the URL can queue songs).
     this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {

@@ -1,4 +1,4 @@
-import {Client, Collection, User} from 'discord.js';
+import {Client, Collection, GuildMember, PermissionsBitField, User} from 'discord.js';
 import {inject, injectable} from 'inversify';
 import ora from 'ora';
 import {TYPES} from './types.js';
@@ -9,6 +9,7 @@ import handleGuildCreate from './events/guild-create.js';
 import handleVoiceStateUpdate from './events/voice-state-update.js';
 import errorMsg from './utils/error-msg.js';
 import {isUserInVoice} from './utils/channels.js';
+import {getGuildSettings} from './utils/get-guild-settings.js';
 import Config from './services/config.js';
 import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
@@ -60,7 +61,7 @@ export default class {
         if (interaction.isCommand()) {
           if (this.config.WEB_ONLY_MODE) {
             if (interaction.isChatInputCommand()) {
-              await interaction.reply({content: '🔒 Discord commands are disabled. Use the web dashboard instead.', ephemeral: true});
+              await interaction.reply({content: '🔒 Discord commands are disabled — use the web dashboard to control the bot.', ephemeral: true});
             }
 
             return;
@@ -75,6 +76,18 @@ export default class {
           if (!interaction.guild) {
             await interaction.reply(errorMsg('you can\'t use this bot in a DM'));
             return;
+          }
+
+          const guildSettings = await getGuildSettings(interaction.guild.id);
+          const adminOnly = (guildSettings as unknown as {adminOnlyCommands?: boolean}).adminOnlyCommands ?? false;
+          if (adminOnly) {
+            const isAdmin = interaction.member instanceof GuildMember
+              ? interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)
+              : false;
+            if (!isAdmin) {
+              await interaction.reply({content: '🔒 Bot commands are restricted to admins only on this server.', ephemeral: true});
+              return;
+            }
           }
 
           const requiresVC = command.requiresVC instanceof Function ? command.requiresVC(interaction) : command.requiresVC;

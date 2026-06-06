@@ -1,0 +1,1 @@
+ALTER TABLE "Setting" ADD COLUMN "adminOnlyCommands" BOOLEAN NOT NULL DEFAULT 0;
