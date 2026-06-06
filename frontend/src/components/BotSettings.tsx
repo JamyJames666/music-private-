@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Settings, Check, Shield, Users } from 'lucide-react'
+import { ChevronDown, Settings, Check, Users } from 'lucide-react'
 import {
   getTextChannels,
   getAnnouncementChannel,
   setAnnouncementChannel,
   getSongRequestSetting,
   setSongRequestSetting,
-  getAdminOnlySetting,
-  setAdminOnlySetting,
   type Channel,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -62,24 +60,18 @@ export default function BotSettings({ token, guildId }: Props) {
   const [srSaving,         setSrSaving]         = useState(false)
   const [srSaved,          setSrSaved]          = useState(false)
 
-  const [adminOnly,   setAdminOnly]   = useState(false)
-  const [aoSaving,    setAoSaving]    = useState(false)
-  const [aoSaved,     setAoSaved]     = useState(false)
-
   const load = useCallback(async () => {
     if (!guildId) return
     setLoading(true)
     try {
-      const [chs, setting, sr, ao] = await Promise.all([
+      const [chs, setting, sr] = await Promise.all([
         getTextChannels(token, guildId),
         getAnnouncementChannel(token, guildId),
         getSongRequestSetting(token, guildId).catch(() => ({ open: true })),
-        getAdminOnlySetting(token, guildId).catch(() => ({ adminOnly: false })),
       ])
       setChannels(chs)
       setCurrent(setting.announcementChannelId)
       setSongRequestsOpen(sr.open)
-      setAdminOnly(ao.adminOnly)
     } catch {
       /* non-fatal */
     } finally {
@@ -117,21 +109,6 @@ export default function BotSettings({ token, guildId }: Props) {
       setSongRequestsOpen(!open)
     } finally {
       setSrSaving(false)
-    }
-  }
-
-  const handleAdminOnly = async (value: boolean) => {
-    setAdminOnly(value)
-    setAoSaving(true)
-    setAoSaved(false)
-    try {
-      await setAdminOnlySetting(token, guildId, value)
-      setAoSaved(true)
-      setTimeout(() => setAoSaved(false), 2000)
-    } catch {
-      setAdminOnly(!value)
-    } finally {
-      setAoSaving(false)
     }
   }
 
@@ -199,44 +176,21 @@ export default function BotSettings({ token, guildId }: Props) {
 
       <div className="border-t border-app-border" />
 
-      {/* Command access control */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold text-app-muted uppercase tracking-widest">
-          Discord command access
-        </p>
-
-        {/* Song requests toggle */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <Users size={13} className="flex-shrink-0 text-app-muted" />
-            <div>
-              <p className="text-sm text-app-text">Song requests</p>
-              <p className="text-xs text-app-border">
-                Allow anyone to use <strong className="text-app-muted">/play</strong> without being an admin
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {srSaved && <Check size={12} className="text-green-400" />}
-            <Toggle checked={songRequestsOpen} onChange={handleSongRequests} disabled={srSaving} />
+      {/* Song requests */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Users size={13} className="flex-shrink-0 text-app-muted" />
+          <div>
+            <p className="text-sm text-app-text">Open song requests</p>
+            <p className="text-xs text-app-border">
+              When off, <strong className="text-app-muted">/play</strong> in Discord is blocked
+              and only dashboard admins can add songs
+            </p>
           </div>
         </div>
-
-        {/* Admin only commands toggle */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <Shield size={13} className="flex-shrink-0 text-app-muted" />
-            <div>
-              <p className="text-sm text-app-text">Admin only commands</p>
-              <p className="text-xs text-app-border">
-                Restrict all Discord bot commands to server admins only
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {aoSaved && <Check size={12} className="text-green-400" />}
-            <Toggle checked={adminOnly} onChange={handleAdminOnly} disabled={aoSaving} />
-          </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {srSaved && <Check size={12} className="text-green-400" />}
+          <Toggle checked={songRequestsOpen} onChange={handleSongRequests} disabled={srSaving} />
         </div>
       </div>
     </div>
