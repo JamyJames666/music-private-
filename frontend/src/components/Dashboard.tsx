@@ -10,8 +10,6 @@ import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
 import AddToQueue from './AddToQueue'
 import BotSettings from './BotSettings'
-import DjDeckV3 from './DjDeckV3'
-import AutoDj from './AutoDj'
 import BulkImport from './BulkImport'
 import Settings from './Settings'
 
@@ -218,7 +216,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
   const [status,         setStatus]         = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
-  const [view, setView] = useState<'player' | 'dj' | 'autodj' | 'admin'>('player')
+  const [view, setView] = useState<'player' | 'admin'>('player')
 
   // Admin unlock — bulkToken stored in localStorage (never the raw password)
   const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
@@ -487,10 +485,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             </form>
           </div>
         )
-      ) : view === 'dj' ? (
-        <DjDeckV3 status={status} token={token} guildId={primaryGuildId} onRefresh={poll} />
-      ) : view === 'autodj' ? (
-        <AutoDj status={status} token={token} guildId={primaryGuildId} onRefresh={poll} />
       ) : (
         <div className="relative flex overflow-hidden" style={{ height: 'calc(100vh - 53px)' }}>
 
