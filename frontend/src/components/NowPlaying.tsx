@@ -126,8 +126,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Art / Video toggle */}
-          {isYoutube && (
+          {/* Art / Video toggle — shown for all tracks since all audio is via YouTube */}
+          {(
             <div className="z-10 mt-4 mb-2 flex items-center gap-1 rounded-full p-0.5"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
               <button
@@ -149,7 +149,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
           {/* Media area */}
           <div className="relative z-10 mb-5 w-full" style={{ maxWidth: 480 }}>
-            {viewMode === 'video' && isYoutube && videoId ? (
+            {viewMode === 'video' && videoId ? (
               <iframe
                 key={`${videoId}-${videoStartPos.current}`}
                 src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos.current}&rel=0&modestbranding=1&iv_load_policy=3`}
