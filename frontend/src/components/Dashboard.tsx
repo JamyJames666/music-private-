@@ -528,24 +528,24 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
-                {/* Art / Video toggle — only shown when something is playing */}
-                {status?.nowPlaying && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#666' }}>View</span>
-                    <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                {/* Art / Video toggle — always shown when player is active */}
+                {status && status.status !== 'IDLE' && (
+                  <div className="flex items-center gap-2 py-1">
+                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#aaa' }}>View</span>
+                    <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}>
                       <button
                         onClick={() => switchView('art')}
-                        className="flex items-center gap-1 text-xs px-3 py-1 rounded-full transition-all font-medium"
-                        style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.5)', color: '#fff' } : { color: '#888' }}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
+                        style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.7)', color: '#fff', boxShadow: '0 0 8px rgba(168,85,247,0.4)' } : { color: '#ccc' }}
                       >
-                        <ImageIcon size={10} /> Art
+                        <ImageIcon size={11} /> Art
                       </button>
                       <button
                         onClick={() => switchView('video')}
-                        className="flex items-center gap-1 text-xs px-3 py-1 rounded-full transition-all font-medium"
-                        style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.5)', color: '#fff' } : { color: '#888' }}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
+                        style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.7)', color: '#fff', boxShadow: '0 0 8px rgba(168,85,247,0.4)' } : { color: '#ccc' }}
                       >
-                        <Video size={10} /> Video
+                        <Video size={11} /> Video
                       </button>
                     </div>
                   </div>
