@@ -18,9 +18,18 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const [localPos, setLocalPos] = useState(0)
   const [localLen, setLocalLen] = useState(0)
   const [songUrl,  setSongUrl]  = useState('')
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tickRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+  const ytIframeRef = useRef<HTMLIFrameElement>(null)
 
   const stopTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
+
+  // Seek the embedded YouTube player without remounting the iframe
+  const seekYT = (pos: number) => {
+    ytIframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func: 'seekTo', args: [pos, true] }),
+      'https://www.youtube.com',
+    )
+  }
 
   useEffect(() => {
     if (!status?.nowPlaying) { stopTick(); return }
@@ -40,6 +49,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       if (shouldSync) {
         setLocalPos(srvPos)
         onPositionChange?.(srvPos)
+        seekYT(srvPos)
       }
     }
     if (playing && !tickRef.current) {
@@ -64,7 +74,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     if (!url.startsWith('http') && !url.includes('/') && url.length === 11) return url
     return null
   }
-  const videoId  = ytIdFromUrl(np?.url)
+  const videoId = ytIdFromUrl(np?.url)
+  const isVideo = viewMode === 'video' && !!videoId
 
   const handlePause = async () => { await (isPlaying ? pause(token, guildId) : resume(token, guildId)).catch(() => null); onRefresh() }
   const handleSkip  = async () => { await skip(token, guildId).catch(() => null); onRefresh() }
@@ -76,13 +87,14 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     const r = progressRef.current?.getBoundingClientRect(); if (!r) return
     const pos = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * localLen)
     setLocalPos(pos)
+    seekYT(pos)
     const {seek: seekFn} = await import('@/lib/api')
     await seekFn(token, guildId, pos).catch(() => null)
     onRefresh()
   }, [active, localLen, token, guildId, onRefresh])
 
   return (
-    <div className="relative flex flex-col items-center z-10 w-full max-w-lg mx-auto">
+    <div className={cn('relative flex flex-col items-center z-10 w-full', !isVideo && 'max-w-lg mx-auto')}>
 
       {/* Big ambient glow — pulsing when playing */}
       <div
@@ -116,14 +128,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Media area */}
-          <div className="relative z-10 mt-4 mb-5 w-full" style={{ maxWidth: 480 }}>
-            {viewMode === 'video' && videoId ? (
+          {/* Media area — full width in video mode, capped at 480 in art mode */}
+          <div className="relative z-10 mt-4 mb-4 w-full" style={isVideo ? undefined : { maxWidth: 480 }}>
+            {isVideo ? (
               <iframe
+                ref={ytIframeRef}
                 key={`${videoId}-${videoStartPos}`}
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3`}
-                className="w-full rounded-3xl"
-                style={{ aspectRatio: '16/9', border: 'none', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
+                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
+                className="w-full rounded-2xl"
+                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -159,7 +172,10 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Title + artist */}
-          <div className="text-center w-full px-6 z-10 mb-1" style={{ maxWidth: 380 }}>
+          <div
+            className={cn('text-center w-full z-10 mb-1', isVideo ? 'px-3' : 'px-6')}
+            style={isVideo ? undefined : { maxWidth: 380 }}
+          >
             <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 22 }} title={np?.title}>
               {np?.title ?? '—'}
             </p>
@@ -169,8 +185,11 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
             </div>
           </div>
 
-          {/* Progress bar */}
-          <div className="w-full px-6 z-10 mt-4 mb-5" style={{ maxWidth: 380 }}>
+          {/* Progress bar — spans the full video width in video mode */}
+          <div
+            className={cn('w-full z-10 mt-4 mb-5', isVideo ? 'px-0' : 'px-6')}
+            style={isVideo ? undefined : { maxWidth: 380 }}
+          >
             <div
               ref={progressRef}
               onClick={handleSeek}
@@ -230,7 +249,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
             >
               <SkipForward size={18} />
             </button>
-
           </div>
         </>
       )}

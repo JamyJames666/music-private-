@@ -524,7 +524,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className="px-8 pt-6 pb-4">
+              <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-8 pt-6 pb-4'}>
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
