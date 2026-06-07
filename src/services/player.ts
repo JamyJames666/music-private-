@@ -84,7 +84,7 @@ export default class {
   public loopCurrentQueue = false;
   // Tracks the last Spotify playlist URL and how many songs were loaded
   // so "Load More from Spotify" can fetch the next batch at the right offset.
-  public spotifyPlaylistContext: {url: string; loadedCount: number} | null = null;
+  public spotifyPlaylistContext: {url: string; loadedCount: number; lyricVideo?: boolean} | null = null;
   private currentChannel: VoiceChannel | undefined;
   // Extra connections for multi-channel broadcast (same audio, multiple channels)
   private readonly extraConnections: Map<string, VoiceConnection> = new Map();

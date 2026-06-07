@@ -333,7 +333,7 @@ export default class WebServer {
         }
       }
 
-      const {query, channelId} = req.body as {query?: string; channelId?: string};
+      const {query, channelId, lyricVideo = true} = req.body as {query?: string; channelId?: string; lyricVideo?: boolean};
       if (!query) {
         res.status(400).json({error: 'query is required'});
         return;
@@ -346,7 +346,7 @@ export default class WebServer {
       }
 
       try {
-        const [songs] = await this.getSongs.getSongs(query, 500, false);
+        const [songs] = await this.getSongs.getSongs(query, 500, false, lyricVideo);
         if (songs.length === 0) {
           res.status(400).json({error: 'No songs found'});
           return;
@@ -396,7 +396,7 @@ export default class WebServer {
 
         // Store Spotify playlist context so "Load More" can fetch the next batch
         if (query.includes('spotify.com/playlist') || query.startsWith('spotify:playlist:')) {
-          player.spotifyPlaylistContext = {url: query, loadedCount: songs.length};
+          player.spotifyPlaylistContext = {url: query, loadedCount: songs.length, lyricVideo};
         }
 
         // Resolve thumbnails for queued Spotify tracks in the background.
@@ -631,7 +631,7 @@ export default class WebServer {
               source: 0, // MediaSource.Youtube
               title: track.name,
               artist: track.artist,
-              url: `ytsearch1:${track.name} ${track.artist} lyric video`,
+              url: `ytsearch1:${track.name} ${track.artist}${ctx.lyricVideo === false ? '' : ' lyric video'}`,
               length: track.durationSeconds,
               offset: 0,
               playlist: {title: 'Spotify Playlist', source: ctx.url},
@@ -646,7 +646,7 @@ export default class WebServer {
         }
 
         // Advance the stored offset so the next "Load More" gets a fresh batch
-        player.spotifyPlaylistContext = {url: ctx.url, loadedCount: ctx.loadedCount + newTracks.length};
+        player.spotifyPlaylistContext = {url: ctx.url, loadedCount: ctx.loadedCount + newTracks.length, lyricVideo: ctx.lyricVideo};
 
         player.prefetchThumbnails();
         res.json({ok: true, added, nextOffset: player.spotifyPlaylistContext.loadedCount});
