@@ -60,7 +60,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const active    = status?.status === 'PLAYING' || status?.status === 'PAUSED'
   const np        = status?.nowPlaying ?? null
   const pct       = localLen > 0 ? Math.min(100, (localPos / localLen) * 100) : 0
-  const isYoutube = np?.source === 'youtube' || (np?.url && !np.url.startsWith('http') && !np.url.includes('/'))
+  const ytIdFromUrl = (url: string | undefined) => {
+    if (!url) return null
+    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+    if (m) return m[1]
+    if (!url.startsWith('http') && !url.includes('/') && url.length === 11) return url
+    return null
+  }
+  const videoId  = ytIdFromUrl(np?.url)
+  const isYoutube = np?.source === 'youtube' || !!videoId
 
   const setView = (mode: 'art' | 'video') => {
     if (mode === 'video') videoStartPos.current = Math.floor(localPos)
@@ -141,10 +149,10 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
           {/* Media area */}
           <div className="relative z-10 mb-5 w-full" style={{ maxWidth: 480 }}>
-            {viewMode === 'video' && isYoutube && np?.url ? (
+            {viewMode === 'video' && isYoutube && videoId ? (
               <iframe
-                key={`${np.url}-${videoStartPos.current}`}
-                src={`https://www.youtube.com/embed/${np.url}?autoplay=1&mute=1&start=${videoStartPos.current}&rel=0&modestbranding=1&iv_load_policy=3`}
+                key={`${videoId}-${videoStartPos.current}`}
+                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos.current}&rel=0&modestbranding=1&iv_load_policy=3`}
                 className="w-full rounded-3xl"
                 style={{ aspectRatio: '16/9', border: 'none', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
                 allow="autoplay; encrypted-media; fullscreen"
