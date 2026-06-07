@@ -21,6 +21,53 @@ interface Props {
   onReconnecting: (v: boolean) => void
 }
 
+function GuildSwitcher({ guilds, primaryGuildId, onSwitch }: { guilds: Guild[]; primaryGuildId: string; onSwitch: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = guilds.find(g => g.id === primaryGuildId)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  if (guilds.length <= 1) return current ? <span className="text-sm" style={{ color: '#555' }}>· {current.name}</span> : null
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-sm transition-colors"
+        style={{ color: open ? '#a855f7' : '#555' }}
+      >
+        · {current?.name ?? '—'} <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 rounded-lg border border-app-border overflow-hidden z-50"
+          style={{ background: '#0e0c1c', minWidth: 160 }}>
+          {guilds.map(g => (
+            <button
+              key={g.id}
+              onClick={() => { onSwitch(g.id); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between"
+              style={g.id === primaryGuildId
+                ? { color: '#a855f7', background: 'rgba(168,85,247,0.1)' }
+                : { color: '#ccc' }}
+              onMouseEnter={e => { if (g.id !== primaryGuildId) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={e => { if (g.id !== primaryGuildId) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+            >
+              {g.name}
+              {g.id === primaryGuildId && <span className="text-[10px] px-1.5 py-0.5 rounded ml-2" style={{ background: 'rgba(168,85,247,0.2)', color: '#c084fc' }}>active</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function JammyLogo({ playing }: { playing: boolean }) {
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -304,8 +351,12 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
         <div className="max-w-[1800px] mx-auto flex items-center gap-3">
           <JammyLogo playing={status?.status === 'PLAYING'} />
           <span className="font-bold text-white text-base tracking-tight">Jammy Beat Box</span>
-          {primaryGuild && (
-            <span className="text-sm" style={{ color: '#555' }}>· {primaryGuild.name}</span>
+          {guilds.length > 0 && (
+            <GuildSwitcher
+              guilds={guilds}
+              primaryGuildId={primaryGuildId}
+              onSwitch={setPrimaryGuild}
+            />
           )}
           <div className="ml-auto">
             <button
