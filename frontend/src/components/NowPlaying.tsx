@@ -126,31 +126,27 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Art / Video toggle */}
-          <div className="z-10 mt-4 mb-3 flex items-center gap-1 rounded-full p-1"
-            style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)' }}>
-            <button
-              onClick={() => setView('art')}
-              className="flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-full transition-all font-medium"
-              style={viewMode === 'art'
-                ? { background: 'rgba(168,85,247,0.5)', color: '#fff' }
-                : { color: '#aaa' }}
-            >
-              <ImageIcon size={11} /> Art
-            </button>
-            <button
-              onClick={() => setView('video')}
-              className="flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-full transition-all font-medium"
-              style={viewMode === 'video'
-                ? { background: 'rgba(168,85,247,0.5)', color: '#fff' }
-                : { color: '#aaa' }}
-            >
-              <Video size={11} /> Video
-            </button>
-          </div>
-
           {/* Media area */}
-          <div className="relative z-10 mb-5 w-full" style={{ maxWidth: 480 }}>
+          <div className="relative z-10 mt-4 mb-5 w-full" style={{ maxWidth: 480 }}>
+            {/* Art / Video toggle — floating top-right of media area */}
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-0.5 rounded-full p-0.5"
+              style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' }}>
+              <button
+                onClick={() => setView('art')}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-all font-medium"
+                style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.6)', color: '#fff' } : { color: '#bbb' }}
+              >
+                <ImageIcon size={10} /> Art
+              </button>
+              <button
+                onClick={() => setView('video')}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-all font-medium"
+                style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.6)', color: '#fff' } : { color: '#bbb' }}
+              >
+                <Video size={10} /> Video
+              </button>
+            </div>
+
             {viewMode === 'video' && videoId ? (
               <iframe
                 key={`${videoId}-${videoStartPos.current}`}
