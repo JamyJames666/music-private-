@@ -126,26 +126,28 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Art / Video toggle — shown for all tracks since all audio is via YouTube */}
-          {(
-            <div className="z-10 mt-4 mb-2 flex items-center gap-1 rounded-full p-0.5"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-              <button
-                onClick={() => setView('art')}
-                className={cn('flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all', viewMode === 'art' ? 'text-white' : 'text-app-muted hover:text-white')}
-                style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.25)' } : {}}
-              >
-                <ImageIcon size={11} /> Art
-              </button>
-              <button
-                onClick={() => setView('video')}
-                className={cn('flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all', viewMode === 'video' ? 'text-white' : 'text-app-muted hover:text-white')}
-                style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.25)' } : {}}
-              >
-                <Video size={11} /> Video
-              </button>
-            </div>
-          )}
+          {/* Art / Video toggle */}
+          <div className="z-10 mt-4 mb-3 flex items-center gap-1 rounded-full p-1"
+            style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)' }}>
+            <button
+              onClick={() => setView('art')}
+              className="flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-full transition-all font-medium"
+              style={viewMode === 'art'
+                ? { background: 'rgba(168,85,247,0.5)', color: '#fff' }
+                : { color: '#aaa' }}
+            >
+              <ImageIcon size={11} /> Art
+            </button>
+            <button
+              onClick={() => setView('video')}
+              className="flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-full transition-all font-medium"
+              style={viewMode === 'video'
+                ? { background: 'rgba(168,85,247,0.5)', color: '#fff' }
+                : { color: '#aaa' }}
+            >
+              <Video size={11} /> Video
+            </button>
+          </div>
 
           {/* Media area */}
           <div className="relative z-10 mb-5 w-full" style={{ maxWidth: 480 }}>
