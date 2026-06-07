@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, SkipForward, Square, Music, ImageIcon, Video } from 'lucide-react'
+import { Play, Pause, SkipForward, Square, Music } from 'lucide-react'
 import { pause, resume, skip, stop, type PlayerStatus } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
@@ -10,18 +10,15 @@ interface Props {
   guildId: string
   onRefresh: () => void
   onPositionChange?: (pos: number) => void
+  viewMode: 'art' | 'video'
+  videoStartPos: number
 }
 
-export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange }: Props) {
+export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange, viewMode, videoStartPos }: Props) {
   const [localPos, setLocalPos] = useState(0)
   const [localLen, setLocalLen] = useState(0)
   const [songUrl,  setSongUrl]  = useState('')
-  const [viewMode, setViewMode] = useState<'art' | 'video'>(() =>
-    (localStorage.getItem('muse_view_mode') ?? 'art') as 'art' | 'video',
-  )
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Track position at the moment we switched to video so iframe starts there
-  const videoStartPos = useRef(0)
 
   const stopTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
 
@@ -68,13 +65,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     return null
   }
   const videoId  = ytIdFromUrl(np?.url)
-  const isYoutube = np?.source === 'youtube' || !!videoId
-
-  const setView = (mode: 'art' | 'video') => {
-    if (mode === 'video') videoStartPos.current = Math.floor(localPos)
-    setViewMode(mode)
-    localStorage.setItem('muse_view_mode', mode)
-  }
 
   const handlePause = async () => { await (isPlaying ? pause(token, guildId) : resume(token, guildId)).catch(() => null); onRefresh() }
   const handleSkip  = async () => { await skip(token, guildId).catch(() => null); onRefresh() }
@@ -128,29 +118,10 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         <>
           {/* Media area */}
           <div className="relative z-10 mt-4 mb-5 w-full" style={{ maxWidth: 480 }}>
-            {/* Art / Video toggle — floating top-right of media area */}
-            <div className="absolute top-3 right-3 z-20 flex items-center gap-0.5 rounded-full p-0.5"
-              style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <button
-                onClick={() => setView('art')}
-                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-all font-medium"
-                style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.6)', color: '#fff' } : { color: '#bbb' }}
-              >
-                <ImageIcon size={10} /> Art
-              </button>
-              <button
-                onClick={() => setView('video')}
-                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-all font-medium"
-                style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.6)', color: '#fff' } : { color: '#bbb' }}
-              >
-                <Video size={10} /> Video
-              </button>
-            </div>
-
             {viewMode === 'video' && videoId ? (
               <iframe
-                key={`${videoId}-${videoStartPos.current}`}
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos.current}&rel=0&modestbranding=1&iv_load_policy=3`}
+                key={`${videoId}-${videoStartPos}`}
+                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3`}
                 className="w-full rounded-3xl"
                 style={{ aspectRatio: '16/9', border: 'none', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
                 allow="autoplay; encrypted-media; fullscreen"

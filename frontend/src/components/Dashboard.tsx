@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
-import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X } from 'lucide-react'
+import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X, ImageIcon, Video } from 'lucide-react'
 import {
   getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, moveChannel,
   ApiError,
@@ -217,6 +217,15 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const [status,         setStatus]         = useState<PlayerStatus | null>(null)
   const [smoothPosition, setSmoothPosition] = useState(0)
   const [view, setView] = useState<'player' | 'admin'>('player')
+  const [viewMode, setViewMode] = useState<'art' | 'video'>(() =>
+    (localStorage.getItem('muse_view_mode') ?? 'art') as 'art' | 'video',
+  )
+  const [videoStartPos, setVideoStartPos] = useState(0)
+  const switchView = (mode: 'art' | 'video') => {
+    if (mode === 'video') setVideoStartPos(Math.floor(smoothPosition))
+    setViewMode(mode)
+    localStorage.setItem('muse_view_mode', mode)
+  }
 
   // Admin unlock — bulkToken stored in localStorage (never the raw password)
   const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
@@ -516,9 +525,31 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
               <div className="px-8 pt-6 pb-4">
-                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} />
+                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
+                {/* Art / Video toggle — only shown when something is playing */}
+                {status?.nowPlaying && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#666' }}>View</span>
+                    <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                      <button
+                        onClick={() => switchView('art')}
+                        className="flex items-center gap-1 text-xs px-3 py-1 rounded-full transition-all font-medium"
+                        style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.5)', color: '#fff' } : { color: '#888' }}
+                      >
+                        <ImageIcon size={10} /> Art
+                      </button>
+                      <button
+                        onClick={() => switchView('video')}
+                        className="flex items-center gap-1 text-xs px-3 py-1 rounded-full transition-all font-medium"
+                        style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.5)', color: '#fff' } : { color: '#888' }}
+                      >
+                        <Video size={10} /> Video
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <AddToQueue
                   token={token}
                   guildId={primaryGuildId}
