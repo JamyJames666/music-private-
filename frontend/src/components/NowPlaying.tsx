@@ -103,7 +103,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           width: 480,
           height: 480,
           background: active
-            ? 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(99,102,241,0.22) 40%, transparent 70%)'
+            ? 'radial-gradient(circle, rgb(var(--accent-rgb) / 0.45) 0%, rgb(var(--accent-dark-rgb) / 0.22) 40%, transparent 70%)'
             : 'radial-gradient(circle, rgba(80,40,120,0.15) 0%, transparent 70%)',
           filter: 'blur(60px)',
           borderRadius: '50%',
@@ -133,7 +133,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                 key={`${videoId}-${videoStartPos}`}
                 src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
                 className="w-full rounded-2xl"
-                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
+                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)' }}
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -146,7 +146,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                     className="w-full rounded-3xl object-cover"
                     style={{
                       aspectRatio: '1',
-                      boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)',
+                      boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
                     }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
@@ -155,7 +155,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                     className="w-full rounded-3xl flex items-center justify-center"
                     style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
                   >
-                    <Music size={72} style={{ color: '#7c3aed' }} />
+                    <Music size={72} style={{ color: 'rgb(var(--accent-dark-rgb))' }} />
                   </div>
                 )}
                 {/* Animated bars — bottom right corner */}
@@ -197,8 +197,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                 className="h-full rounded-full transition-[width] duration-1000"
                 style={{
                   width: `${pct}%`,
-                  background: 'linear-gradient(90deg, #a855f7, #6366f1)',
-                  boxShadow: '0 0 8px rgba(168,85,247,0.6)',
+                  background: 'linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent-dark-rgb)))',
+                  boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.6)',
                 }}
               />
             </div>
@@ -227,7 +227,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               style={{
                 width: 68, height: 68,
                 background: '#fff',
-                boxShadow: '0 0 0 8px rgba(168,85,247,0.20), 0 8px 32px rgba(0,0,0,0.5)',
+                boxShadow: '0 0 0 8px rgb(var(--accent-rgb) / 0.20), 0 8px 32px rgba(0,0,0,0.5)',
               }}
             >
               {isPlaying

@@ -104,8 +104,8 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
       <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
-            style={{ background: 'rgba(168,85,247,0.15)' }}>
-            <Lock size={20} style={{ color: '#a855f7' }} />
+            style={{ background: 'rgb(var(--accent-rgb) / 0.15)' }}>
+            <Lock size={20} style={{ color: 'rgb(var(--accent-rgb))' }} />
           </div>
           <h1 className="text-lg font-bold text-white">Bulk Import</h1>
           <p className="text-sm" style={{ color: '#666' }}>Enter the Bulk Import password to continue</p>
@@ -209,8 +209,8 @@ Maroon 5,Christina Aguilera - Moves Like Jagger`}
       {/* Preview */}
       {queries.length > 0 && (
         <div className="rounded-xl p-4 space-y-2"
-          style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)' }}>
-          <p className="text-xs font-semibold" style={{ color: '#a855f7' }}>
+          style={{ background: 'rgb(var(--accent-rgb) / 0.06)', border: '1px solid rgb(var(--accent-rgb) / 0.2)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'rgb(var(--accent-rgb))' }}>
             {queries.length} song{queries.length !== 1 ? 's' : ''} ready to queue
           </p>
           <ul className="space-y-0.5 max-h-36 overflow-y-auto">

@@ -150,7 +150,7 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-white">{g?.name ?? id}</span>
                   {isPrimary && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: '#c084fc' }}>
                       Primary
                     </span>
                   )}
@@ -160,8 +160,8 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                     <button
                       onClick={() => onSetPrimary(id)}
                       className="text-xs px-2 py-0.5 rounded border transition-colors"
-                      style={{ borderColor: '#a855f7', color: '#a855f7' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.15)' }}
+                      style={{ borderColor: 'rgb(var(--accent-rgb))', color: 'rgb(var(--accent-rgb))' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--accent-rgb) / 0.15)' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       Set primary
@@ -229,7 +229,7 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                     ? 'border-purple-500/40 text-purple-400'
                     : 'border-app-border text-app-muted hover:border-app-muted/50',
                 )}
-                style={songRequestsOpen ? { background: 'rgba(168,85,247,0.15)' } : { background: 'transparent' }}
+                style={songRequestsOpen ? { background: 'rgb(var(--accent-rgb) / 0.15)' } : { background: 'transparent' }}
               >
                 <Users size={12} /> Everyone
               </button>
@@ -242,7 +242,7 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
                     ? 'border-purple-500/40 text-purple-400'
                     : 'border-app-border text-app-muted hover:border-app-muted/50',
                 )}
-                style={!songRequestsOpen ? { background: 'rgba(168,85,247,0.15)' } : { background: 'transparent' }}
+                style={!songRequestsOpen ? { background: 'rgb(var(--accent-rgb) / 0.15)' } : { background: 'transparent' }}
               >
                 <Lock size={12} /> Admin only
               </button>
@@ -250,7 +250,7 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
           )}
         </div>
 
-        {saved && <p className="text-xs" style={{ color: '#a855f7' }}>Saved.</p>}
+        {saved && <p className="text-xs" style={{ color: 'rgb(var(--accent-rgb))' }}>Saved.</p>}
       </div>
 
       {/* Guild label for context */}

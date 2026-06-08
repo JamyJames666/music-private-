@@ -38,7 +38,7 @@ function GuildSwitcher({ guilds, primaryGuildId, onSwitch }: { guilds: Guild[]; 
       <button
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1 text-sm transition-colors"
-        style={{ color: open ? '#a855f7' : '#555' }}
+        style={{ color: open ? 'rgb(var(--accent-rgb))' : '#555' }}
       >
         · {current?.name ?? '—'} <ChevronDown size={12} />
       </button>
@@ -51,13 +51,13 @@ function GuildSwitcher({ guilds, primaryGuildId, onSwitch }: { guilds: Guild[]; 
               onClick={() => { onSwitch(g.id); setOpen(false) }}
               className="w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between"
               style={g.id === primaryGuildId
-                ? { color: '#a855f7', background: 'rgba(168,85,247,0.1)' }
+                ? { color: 'rgb(var(--accent-rgb))', background: 'rgb(var(--accent-rgb) / 0.1)' }
                 : { color: '#ccc' }}
               onMouseEnter={e => { if (g.id !== primaryGuildId) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
               onMouseLeave={e => { if (g.id !== primaryGuildId) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
             >
               {g.name}
-              {g.id === primaryGuildId && <span className="text-[10px] px-1.5 py-0.5 rounded ml-2" style={{ background: 'rgba(168,85,247,0.2)', color: '#c084fc' }}>active</span>}
+              {g.id === primaryGuildId && <span className="text-[10px] px-1.5 py-0.5 rounded ml-2" style={{ background: 'rgb(var(--accent-rgb) / 0.2)', color: 'rgb(var(--accent-rgb))' }}>active</span>}
             </button>
           ))}
         </div>
@@ -76,8 +76,8 @@ function JammyLogo({ playing }: { playing: boolean }) {
       <rect x="20" y="7"  width="3.5" height="16" rx="1.5" fill="white" opacity="0.7"  className={playing ? 'animate-bar'   : undefined} />
       <defs>
         <linearGradient id="logoGrad" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#a855f7" />
-          <stop offset="100%" stopColor="#6366f1" />
+          <stop offset="0%" stopColor="rgb(var(--accent-rgb))" />
+          <stop offset="100%" stopColor="rgb(var(--accent-dark-rgb))" />
         </linearGradient>
       </defs>
     </svg>
@@ -121,8 +121,8 @@ function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, on
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ChevronRight size={11} style={{ color: '#a855f7' }} />
-          <span className="text-xs font-semibold" style={{ color: '#a855f7' }}>{guildName}</span>
+          <ChevronRight size={11} style={{ color: 'rgb(var(--accent-rgb))' }} />
+          <span className="text-xs font-semibold" style={{ color: 'rgb(var(--accent-rgb))' }}>{guildName}</span>
         </div>
         <button onClick={onRemove} className="text-app-muted hover:text-white transition-colors">
           <X size={13} />
@@ -385,7 +385,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               }}
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
               style={view === 'admin'
-                ? { color: '#a855f7', borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)' }
+                ? { color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)', background: 'rgb(var(--accent-rgb) / 0.1)' }
                 : { color: '#888', background: 'transparent' }}
               title="Settings"
             >
@@ -400,9 +400,9 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <SettingsIcon size={18} style={{ color: '#a855f7' }} />
+                <SettingsIcon size={18} style={{ color: 'rgb(var(--accent-rgb))' }} />
                 <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>
+                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))' }}>
                   {primaryGuild?.name ?? primaryGuildId}
                 </span>
               </div>
@@ -458,8 +458,8 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
-                style={{ background: 'rgba(168,85,247,0.15)' }}>
-                <Lock size={20} style={{ color: '#a855f7' }} />
+                style={{ background: 'rgb(var(--accent-rgb) / 0.15)' }}>
+                <Lock size={20} style={{ color: 'rgb(var(--accent-rgb))' }} />
               </div>
               <h1 className="text-lg font-bold text-white">Admin Panel</h1>
               <p className="text-sm" style={{ color: '#666' }}>Enter the admin password to continue.</p>
@@ -535,7 +535,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
               style={{
                 top: 40, width: 420, height: 420,
-                background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, rgba(99,102,241,0.10) 45%, transparent 70%)',
+                background: 'radial-gradient(circle, rgb(var(--accent-rgb) / 0.18) 0%, rgb(var(--accent-dark-rgb) / 0.10) 45%, transparent 70%)',
                 filter: 'blur(60px)',
                 borderRadius: '50%',
                 zIndex: 0,
@@ -553,14 +553,14 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                       <button
                         onClick={() => switchView('art')}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
-                        style={viewMode === 'art' ? { background: 'rgba(168,85,247,0.7)', color: '#fff', boxShadow: '0 0 8px rgba(168,85,247,0.4)' } : { color: '#ccc' }}
+                        style={viewMode === 'art' ? { background: 'rgb(var(--accent-rgb) / 0.7)', color: '#fff', boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.4)' } : { color: '#ccc' }}
                       >
                         <ImageIcon size={11} /> Art
                       </button>
                       <button
                         onClick={() => switchView('video')}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
-                        style={viewMode === 'video' ? { background: 'rgba(168,85,247,0.7)', color: '#fff', boxShadow: '0 0 8px rgba(168,85,247,0.4)' } : { color: '#ccc' }}
+                        style={viewMode === 'video' ? { background: 'rgb(var(--accent-rgb) / 0.7)', color: '#fff', boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.4)' } : { color: '#ccc' }}
                       >
                         <Video size={11} /> Video
                       </button>
@@ -591,7 +591,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                             onClick={() => moveChannel(token, primaryGuildId, c.id).then(poll).catch(() => null)}
                             className="text-xs px-3 py-1.5 rounded-lg border transition-all"
                             style={active
-                              ? { background: 'rgba(168,85,247,0.15)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)' }
+                              ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
                               : { background: 'transparent', color: '#666', borderColor: '#333' }}
                           >
                             🔊 {c.name}
@@ -641,7 +641,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           onClick={e => { if (e.target === e.currentTarget) { setShowAdminPw(false); setAdminPw(''); setAdminPwError('') } }}>
           <div className="card p-6 w-full max-w-sm space-y-4 mx-4">
             <div className="flex items-center gap-2">
-              <Lock size={16} style={{ color: '#a855f7' }} />
+              <Lock size={16} style={{ color: 'rgb(var(--accent-rgb))' }} />
               <h2 className="text-sm font-semibold text-white">Admin Panel</h2>
             </div>
             <p className="text-xs" style={{ color: '#666' }}>

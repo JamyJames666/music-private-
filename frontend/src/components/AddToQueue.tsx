@@ -84,13 +84,13 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
 
       {/* Required: video type */}
       <div className="space-y-1">
-        <p className="text-xs" style={{ color: '#666' }}>Video type <span style={{ color: '#a855f7' }}>*</span></p>
+        <p className="text-xs" style={{ color: '#666' }}>Video type <span style={{ color: 'rgb(var(--accent-rgb))' }}>*</span></p>
         <div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => saveVideoType('lyric')}
             className={cn(btnBase, videoType === 'lyric' ? btnActive : btnInactive)}
-            style={videoType === 'lyric' ? { background: 'rgba(168,85,247,0.25)' } : {}}
+            style={videoType === 'lyric' ? { background: 'rgb(var(--accent-rgb) / 0.25)' } : {}}
           >
             <Music size={10} /> Lyric video
           </button>
@@ -98,7 +98,7 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
             type="button"
             onClick={() => saveVideoType('music')}
             className={cn(btnBase, videoType === 'music' ? btnActive : btnInactive)}
-            style={videoType === 'music' ? { background: 'rgba(168,85,247,0.25)' } : {}}
+            style={videoType === 'music' ? { background: 'rgb(var(--accent-rgb) / 0.25)' } : {}}
           >
             <Film size={10} /> Music video
           </button>
@@ -132,7 +132,7 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
             onClick={() => saveInsertMode('bottom')}
             title="Add to end of queue"
             className={cn(btnBase, insertMode === 'bottom' ? btnActive : btnInactive)}
-            style={insertMode === 'bottom' ? { background: 'rgba(168,85,247,0.25)' } : {}}
+            style={insertMode === 'bottom' ? { background: 'rgb(var(--accent-rgb) / 0.25)' } : {}}
           >
             <ArrowDown size={10} /> End
           </button>
@@ -141,7 +141,7 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
             onClick={() => saveInsertMode('top')}
             title="Play next (top of queue)"
             className={cn(btnBase, insertMode === 'top' ? btnActive : btnInactive)}
-            style={insertMode === 'top' ? { background: 'rgba(168,85,247,0.25)' } : {}}
+            style={insertMode === 'top' ? { background: 'rgb(var(--accent-rgb) / 0.25)' } : {}}
           >
             <ArrowUp size={10} /> Next
           </button>
@@ -150,7 +150,7 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
             onClick={() => saveInsertMode('custom')}
             title="Insert at specific queue position"
             className={cn(btnBase, insertMode === 'custom' ? btnActive : btnInactive)}
-            style={insertMode === 'custom' ? { background: 'rgba(168,85,247,0.25)' } : {}}
+            style={insertMode === 'custom' ? { background: 'rgb(var(--accent-rgb) / 0.25)' } : {}}
           >
             <Hash size={10} /> Pos
           </button>
@@ -187,7 +187,7 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
       </form>
 
       {!videoType && query.trim() && (
-        <p className="text-xs" style={{ color: '#a855f7' }}>Select a video type above to add</p>
+        <p className="text-xs" style={{ color: 'rgb(var(--accent-rgb))' }}>Select a video type above to add</p>
       )}
 
       {status && (

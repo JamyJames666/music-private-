@@ -89,7 +89,7 @@ function QueueRow({ id, item, displayNumber, onRemove, onMoveToTop, draggable, i
       {/* Up next badge */}
       {isUpNext && (
         <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded flex-shrink-0"
-          style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>
+          style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))' }}>
           Up next
         </span>
       )}
@@ -288,7 +288,7 @@ export default function QueueCard({
               return (
                 <span className="text-xs tabular-nums font-medium" style={{ color: '#666' }}>
                   · 1/{total}
-                  <span className="ml-1.5 font-bold" style={{ color: '#a855f7' }}>{pct}%</span>
+                  <span className="ml-1.5 font-bold" style={{ color: 'rgb(var(--accent-rgb))' }}>{pct}%</span>
                 </span>
               )
             })()}
@@ -306,7 +306,7 @@ export default function QueueCard({
             pendingCount > 0 && !bringingToQueue && 'animate-lazy-ready',
           )}
           style={pendingCount > 0
-            ? { background: 'rgba(168,85,247,0.20)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.40)' }
+            ? { background: 'rgb(var(--accent-rgb) / 0.20)', color: 'rgb(var(--accent-rgb))', border: '1px solid rgb(var(--accent-rgb) / 0.40)' }
             : { background: 'transparent', color: '#444', border: '1px solid #333', cursor: 'default' }
           }
           title={pendingCount > 0 ? `Load ${pendingCount} more songs into queue` : 'No lazy songs waiting'}
@@ -388,9 +388,9 @@ export default function QueueCard({
                 {/* Pinned now-playing row */}
                 {nowPlaying && !isSearching && (
                   <li className="flex items-center gap-3 px-3 py-3.5 rounded-xl border-l-2 mb-1"
-                    style={{ background: 'rgba(168,85,247,0.07)', borderLeftColor: '#a855f7' }}>
+                    style={{ background: 'rgb(var(--accent-rgb) / 0.07)', borderLeftColor: 'rgb(var(--accent-rgb))' }}>
                     <span className="text-xs tabular-nums w-5 text-right flex-shrink-0 font-mono"
-                      style={{ color: '#a855f7' }}>♪</span>
+                      style={{ color: 'rgb(var(--accent-rgb))' }}>♪</span>
                     {nowPlaying.thumbnailUrl ? (
                       <img src={nowPlaying.thumbnailUrl} alt="" loading="lazy"
                         className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
@@ -401,7 +401,7 @@ export default function QueueCard({
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-base font-semibold truncate" style={{ color: '#a855f7' }}
+                      <p className="text-base font-semibold truncate" style={{ color: 'rgb(var(--accent-rgb))' }}
                         title={nowPlaying.title}>{nowPlaying.title}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <p className="text-sm truncate" style={{ color: '#888' }}>{nowPlaying.artist}</p>
@@ -413,9 +413,9 @@ export default function QueueCard({
                     </span>
                     {isPlaying && (
                       <div className="flex items-end gap-[2px] h-4 flex-shrink-0">
-                        <span className="block w-[3px] rounded-sm animate-bar"   style={{ background: '#a855f7' }} />
-                        <span className="block w-[3px] rounded-sm animate-bar-2" style={{ background: '#a855f7' }} />
-                        <span className="block w-[3px] rounded-sm animate-bar-3" style={{ background: '#a855f7' }} />
+                        <span className="block w-[3px] rounded-sm animate-bar"   style={{ background: 'rgb(var(--accent-rgb))' }} />
+                        <span className="block w-[3px] rounded-sm animate-bar-2" style={{ background: 'rgb(var(--accent-rgb))' }} />
+                        <span className="block w-[3px] rounded-sm animate-bar-3" style={{ background: 'rgb(var(--accent-rgb))' }} />
                       </div>
                     )}
                   </li>
