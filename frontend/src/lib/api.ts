@@ -94,9 +94,9 @@ export const getAnnouncementChannel = (t: string, guildId: string) =>
 export const setAnnouncementChannel = (t: string, guildId: string, channelId: string | null) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/announcement`, t, {channelId})
 
-export const play    = (t: string, guildId: string, query: string, channelId?: string, lyricVideo = true) =>
+export const play    = (t: string, guildId: string, query: string, channelId?: string, lyricVideo = true, insertAt: 'top' | 'bottom' | number = 'bottom') =>
   req<{ ok: boolean; added: number; queued: number; pending: number; first: string }>(
-    'POST', `/api/guilds/${guildId}/play`, t, { query, channelId, lyricVideo },
+    'POST', `/api/guilds/${guildId}/play`, t, { query, channelId, lyricVideo, insertAt },
   )
 export const pause      = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/pause`,      t)
 export const resume     = (t: string, guildId: string) => req('POST', `/api/guilds/${guildId}/resume`,     t)

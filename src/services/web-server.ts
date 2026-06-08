@@ -333,7 +333,7 @@ export default class WebServer {
         }
       }
 
-      const {query, channelId, lyricVideo = true} = req.body as {query?: string; channelId?: string; lyricVideo?: boolean};
+      const {query, channelId, lyricVideo = true, insertAt = 'bottom'} = req.body as {query?: string; channelId?: string; lyricVideo?: boolean; insertAt?: 'top' | 'bottom' | number};
       if (!query) {
         res.status(400).json({error: 'query is required'});
         return;
@@ -378,13 +378,20 @@ export default class WebServer {
 
         player.setPendingSongs(pendingSongs);
 
-        activeSongs.forEach(song => {
-          player.add({
-            ...song,
-            addedInChannelId: targetChannelId,
-            requestedBy: 'web-dashboard',
+        if (insertAt === 'top') {
+          // Insert in reverse so the first song in the array ends up playing next
+          [...activeSongs].reverse().forEach(song => {
+            player.add({...song, addedInChannelId: targetChannelId, requestedBy: 'web-dashboard'}, {insertPosition: 1});
           });
-        });
+        } else if (typeof insertAt === 'number') {
+          activeSongs.forEach((song, i) => {
+            player.add({...song, addedInChannelId: targetChannelId, requestedBy: 'web-dashboard'}, {insertPosition: insertAt + i});
+          });
+        } else {
+          activeSongs.forEach(song => {
+            player.add({...song, addedInChannelId: targetChannelId, requestedBy: 'web-dashboard'});
+          });
+        }
 
         if (!player.voiceConnection && targetChannelId) {
           const channel = guild.channels.cache.get(targetChannelId) as VoiceChannel;

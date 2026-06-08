@@ -577,13 +577,13 @@ export default class {
     return this.queue.slice(this.queuePosition + 1);
   }
 
-  add(song: QueuedSong, {immediate = false} = {}): void {
-    if (song.playlist || !immediate) {
-      // Add to end of queue
+  add(song: QueuedSong, {immediate = false, insertPosition}: {immediate?: boolean; insertPosition?: number} = {}): void {
+    const pos = insertPosition ?? (immediate ? 1 : undefined);
+    if (pos === undefined) {
       this.queue.push(song);
     } else {
-      // Add as the next song to be played
-      const insertAt = this.queuePosition + 1;
+      // Insert at a specific 1-based position in the upcoming queue
+      const insertAt = Math.min(this.queuePosition + Math.max(1, pos), this.queue.length);
       this.queue = [...this.queue.slice(0, insertAt), song, ...this.queue.slice(insertAt)];
     }
   }

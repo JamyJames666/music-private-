@@ -23,7 +23,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
   const stopTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
 
-  // Seek the embedded YouTube player without remounting the iframe
   const seekYT = (pos: number) => {
     ytIframeRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: 'command', func: 'seekTo', args: [pos, true] }),
@@ -41,9 +40,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       onPositionChange?.(srvPos)
     } else {
       setLocalLen(np.length)
-      // Only sync when srvPos is ahead of localPos (not a transient reset to 0).
-      // A backwards jump (srvPos < localPos by more than 3s) only applies
-      // if srvPos is non-zero — zero means a transient skip/seek reset, ignore it.
       const diff = srvPos - localPos
       const shouldSync = srvPos > 0 && (diff > 3 || diff < -3) && !(srvPos < 5 && localPos > 10)
       if (shouldSync) {
@@ -94,21 +90,21 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   }, [active, localLen, token, guildId, onRefresh])
 
   return (
-    <div className={cn('relative flex flex-col items-center z-10 w-full', !isVideo && 'max-w-lg mx-auto')}>
+    <div className={cn('relative flex flex-col items-center z-10 w-full', !isVideo && 'max-w-sm mx-auto')}>
 
-      {/* Big ambient glow — pulsing when playing */}
+      {/* Ambient glow */}
       <div
         className="absolute pointer-events-none transition-opacity duration-700"
         style={{
-          top: -20,
+          top: -10,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: 480,
-          height: 480,
+          width: 300,
+          height: 300,
           background: active
             ? 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(99,102,241,0.22) 40%, transparent 70%)'
             : 'radial-gradient(circle, rgba(80,40,120,0.15) 0%, transparent 70%)',
-          filter: 'blur(60px)',
+          filter: 'blur(50px)',
           borderRadius: '50%',
           zIndex: 0,
           animation: isPlaying ? 'pulse 3s ease-in-out infinite' : 'none',
@@ -116,27 +112,30 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       />
 
       {!active ? (
-        <div className="flex flex-col items-center gap-5 py-12 z-10">
+        <div className="flex flex-col items-center gap-4 py-8 z-10">
           <div
-            className="rounded-3xl flex items-center justify-center"
-            style={{ width: '100%', maxWidth: 480, aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
+            className="rounded-2xl flex items-center justify-center"
+            style={{ width: '100%', maxWidth: 240, aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
           >
-            <Music size={72} style={{ color: '#333' }} />
+            <Music size={56} style={{ color: '#333' }} />
           </div>
-          <p className="text-white font-bold text-xl">Nothing playing</p>
-          <p className="text-sm" style={{ color: '#555' }}>Add a song to get started</p>
+          <p className="text-white font-bold text-lg">Nothing playing</p>
+          <p className="text-xs" style={{ color: '#555' }}>Add a song to get started</p>
         </div>
       ) : (
         <>
-          {/* Media area — full width in video mode, capped at 480 in art mode */}
-          <div className="relative z-10 mt-4 mb-4 w-full" style={isVideo ? undefined : { maxWidth: 480 }}>
+          {/* Media area */}
+          <div
+            className="relative z-10 mt-2 mb-3 w-full"
+            style={isVideo ? { maxWidth: 360, margin: '8px auto 12px' } : { maxWidth: 260 }}
+          >
             {isVideo ? (
               <iframe
                 ref={ytIframeRef}
                 key={`${videoId}-${videoStartPos}`}
                 src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
-                className="w-full rounded-2xl"
-                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)' }}
+                className="w-full rounded-xl"
+                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 12px 48px rgba(0,0,0,0.7), 0 0 24px rgba(168,85,247,0.2)' }}
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -146,23 +145,22 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                   <img
                     src={np.thumbnailUrl}
                     alt={np.title}
-                    className="w-full rounded-3xl object-cover"
+                    className="w-full rounded-2xl object-cover"
                     style={{
                       aspectRatio: '1',
-                      boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgba(168,85,247,0.25)',
+                      boxShadow: '0 12px 48px rgba(0,0,0,0.7), 0 0 24px rgba(168,85,247,0.2)',
                     }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 ) : (
                   <div
-                    className="w-full rounded-3xl flex items-center justify-center"
+                    className="w-full rounded-2xl flex items-center justify-center"
                     style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
                   >
-                    <Music size={72} style={{ color: '#7c3aed' }} />
+                    <Music size={56} style={{ color: '#7c3aed' }} />
                   </div>
                 )}
-                {/* Animated bars — bottom right corner */}
-                <div className={cn('absolute bottom-4 right-4 flex items-end gap-[3px] h-5', !isPlaying && 'opacity-0')}>
+                <div className={cn('absolute bottom-3 right-3 flex items-end gap-[3px] h-4', !isPlaying && 'opacity-0')}>
                   <span className="block w-1 rounded-sm animate-bar"   style={{ background: 'rgba(255,255,255,0.8)' }} />
                   <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
                   <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
@@ -172,82 +170,75 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Title + artist */}
-          <div
-            className={cn('text-center w-full z-10 mb-1', isVideo ? 'px-3' : 'px-6')}
-            style={isVideo ? undefined : { maxWidth: 380 }}
-          >
-            <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 22 }} title={np?.title}>
+          <div className="text-center w-full z-10 px-4" style={{ maxWidth: isVideo ? 360 : 280 }}>
+            <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 17 }} title={np?.title}>
               {np?.title ?? '—'}
             </p>
-            <div className="flex items-center justify-center gap-2 mt-1.5">
-              <p className="text-base truncate" style={{ color: '#888' }}>{np?.artist ?? '—'}</p>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <p className="text-sm truncate" style={{ color: '#888' }}>{np?.artist ?? '—'}</p>
               {np?.source && <SourceBadge source={np.source} />}
             </div>
           </div>
 
-          {/* Progress bar — spans the full video width in video mode */}
-          <div
-            className={cn('w-full z-10 mt-4 mb-5', isVideo ? 'px-0' : 'px-6')}
-            style={isVideo ? undefined : { maxWidth: 380 }}
-          >
+          {/* Progress bar */}
+          <div className="w-full z-10 mt-3 mb-3 px-4" style={{ maxWidth: isVideo ? 360 : 280 }}>
             <div
               ref={progressRef}
               onClick={handleSeek}
               className={cn('relative rounded-full overflow-hidden', active && 'cursor-pointer')}
-              style={{ height: 5, background: 'rgba(255,255,255,0.12)' }}
+              style={{ height: 4, background: 'rgba(255,255,255,0.12)' }}
             >
               <div
                 className="h-full rounded-full transition-[width] duration-1000"
                 style={{
                   width: `${pct}%`,
                   background: 'linear-gradient(90deg, #a855f7, #6366f1)',
-                  boxShadow: '0 0 8px rgba(168,85,247,0.6)',
+                  boxShadow: '0 0 6px rgba(168,85,247,0.6)',
                 }}
               />
             </div>
-            <div className="flex justify-between text-xs mt-2" style={{ color: '#555' }}>
+            <div className="flex justify-between text-xs mt-1.5" style={{ color: '#555' }}>
               <span>{fmtTime(localPos)}</span>
               <span>{fmtTime(localLen)}</span>
             </div>
           </div>
 
           {/* Controls */}
-          <div className="flex items-center gap-6 z-10">
+          <div className="flex items-center gap-4 z-10 mb-1">
             <button
               onClick={handleStop}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 36, height: 36, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
               title="Stop"
             >
-              <Square size={18} />
+              <Square size={15} />
             </button>
 
-            {/* Big play/pause */}
             <button
               onClick={handlePause}
               className="flex items-center justify-center rounded-full transition-all hover:scale-105 active:scale-95"
               style={{
-                width: 68, height: 68,
+                width: 52, height: 52,
                 background: '#fff',
-                boxShadow: '0 0 0 8px rgba(168,85,247,0.20), 0 8px 32px rgba(0,0,0,0.5)',
+                boxShadow: '0 0 0 6px rgba(168,85,247,0.20), 0 6px 24px rgba(0,0,0,0.5)',
               }}
             >
               {isPlaying
-                ? <Pause size={24} style={{ color: '#000' }} />
-                : <Play  size={24} style={{ color: '#000', marginLeft: 3 }} />}
+                ? <Pause size={20} style={{ color: '#000' }} />
+                : <Play  size={20} style={{ color: '#000', marginLeft: 2 }} />}
             </button>
 
             <button
               onClick={handleSkip}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 36, height: 36, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
               title="Skip"
             >
-              <SkipForward size={18} />
+              <SkipForward size={15} />
             </button>
           </div>
         </>
