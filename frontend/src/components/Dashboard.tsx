@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X, ImageIcon, Video } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin, moveChannel,
+  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -541,7 +541,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-8 pt-6 pb-4'}>
+              <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-6 pt-4 pb-2'}>
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
@@ -574,33 +574,8 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   channelId={primaryChannelId}
                   onChannelChange={handlePrimaryChannelChange}
                   onRefresh={poll}
+                  activeChannelIds={status?.activeChannelIds ?? []}
                 />
-
-                {/* Channel switcher */}
-                {primaryChannels.length > 0 && (
-                  <div className="card p-4 space-y-2">
-                    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#888' }}>
-                      Switch channel
-                    </h2>
-                    <div className="flex flex-wrap gap-2">
-                      {primaryChannels.map(c => {
-                        const active = status?.activeChannelIds?.includes(c.id)
-                        return (
-                          <button
-                            key={c.id}
-                            onClick={() => moveChannel(token, primaryGuildId, c.id).then(poll).catch(() => null)}
-                            className="text-xs px-3 py-1.5 rounded-lg border transition-all"
-                            style={active
-                              ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
-                              : { background: 'transparent', color: '#666', borderColor: '#333' }}
-                          >
-                            🔊 {c.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
 
               </div>
             </div>

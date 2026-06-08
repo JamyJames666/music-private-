@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Plus, ChevronDown, Music, Film, ArrowDown, ArrowUp, Hash } from 'lucide-react'
-import { play, type Channel } from '@/lib/api'
+import { play, moveChannel, type Channel } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -10,12 +10,13 @@ interface Props {
   channelId: string
   onChannelChange: (id: string) => void
   onRefresh: () => void
+  activeChannelIds: string[]
 }
 
 type VideoType  = 'lyric' | 'music' | null
 type InsertMode = 'bottom' | 'top' | 'custom'
 
-export default function AddToQueue({ token, guildId, channels, channelId, onChannelChange, onRefresh }: Props) {
+export default function AddToQueue({ token, guildId, channels, channelId, onChannelChange, onRefresh, activeChannelIds }: Props) {
   const [query,      setQuery]      = useState('')
   const [loading,    setLoading]    = useState(false)
   const [status,     setStatus]     = useState<{ ok: boolean; msg: string } | null>(null)
@@ -194,6 +195,31 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
         <p className={cn('text-xs animate-fade-up', status.ok ? 'text-app-muted' : 'text-app-danger')}>
           {status.msg}
         </p>
+      )}
+
+      {/* Switch channel — folded into this card */}
+      {channels.length > 0 && (
+        <div className="pt-2 border-t space-y-1.5" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#888' }}>Switch channel</p>
+          <div className="flex flex-wrap gap-1.5">
+            {channels.map(c => {
+              const active = activeChannelIds.includes(c.id)
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => moveChannel(token, guildId, c.id).then(onRefresh).catch(() => null)}
+                  className="text-xs px-2.5 py-1 rounded-lg border transition-all"
+                  style={active
+                    ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
+                    : { background: 'transparent', color: '#666', borderColor: '#333' }}
+                >
+                  🔊 {c.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )

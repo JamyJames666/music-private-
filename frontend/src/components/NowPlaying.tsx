@@ -126,7 +126,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       ) : (
         <>
           {/* Media area — full width in video mode, capped at 480 in art mode */}
-          <div className="relative z-10 mt-4 mb-4 w-full" style={isVideo ? undefined : { maxWidth: 480 }}>
+          <div className="relative z-10 mt-2 mb-2 w-full" style={isVideo ? undefined : { maxWidth: 480 }}>
             {isVideo ? (
               <iframe
                 ref={ytIframeRef}
@@ -170,80 +170,80 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
 
           {/* Title + artist */}
           <div
-            className={cn('text-center w-full z-10 mb-1', isVideo ? 'px-3' : 'px-6')}
+            className={cn('text-center w-full z-10', isVideo ? 'px-3' : 'px-6')}
             style={isVideo ? undefined : { maxWidth: 380 }}
           >
-            <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 22 }} title={np?.title}>
+            <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 17 }} title={np?.title}>
               {np?.title ?? '—'}
             </p>
-            <div className="flex items-center justify-center gap-2 mt-1.5">
-              <p className="text-base truncate" style={{ color: '#888' }}>{np?.artist ?? '—'}</p>
+            <div className="flex items-center justify-center gap-2 mt-0.5">
+              <p className="text-sm truncate" style={{ color: '#888' }}>{np?.artist ?? '—'}</p>
               {np?.source && <SourceBadge source={np.source} />}
             </div>
           </div>
 
-          {/* Progress bar — spans the full video width in video mode */}
+          {/* Progress bar */}
           <div
-            className={cn('w-full z-10 mt-4 mb-5', isVideo ? 'px-0' : 'px-6')}
+            className={cn('w-full z-10 mt-2 mb-3', isVideo ? 'px-0' : 'px-6')}
             style={isVideo ? undefined : { maxWidth: 380 }}
           >
             <div
               ref={progressRef}
               onClick={handleSeek}
               className={cn('relative rounded-full overflow-hidden', active && 'cursor-pointer')}
-              style={{ height: 5, background: 'rgba(255,255,255,0.12)' }}
+              style={{ height: 4, background: 'rgba(255,255,255,0.12)' }}
             >
               <div
                 className="h-full rounded-full transition-[width] duration-1000"
                 style={{
                   width: `${pct}%`,
                   background: 'linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent-dark-rgb)))',
-                  boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.6)',
+                  boxShadow: '0 0 6px rgb(var(--accent-rgb) / 0.6)',
                 }}
               />
             </div>
-            <div className="flex justify-between text-xs mt-2" style={{ color: '#555' }}>
+            <div className="flex justify-between text-xs mt-1.5" style={{ color: '#555' }}>
               <span>{fmtTime(localPos)}</span>
               <span>{fmtTime(localLen)}</span>
             </div>
           </div>
 
           {/* Controls */}
-          <div className="flex items-center gap-6 z-10">
+          <div className="flex items-center gap-4 z-10">
             <button
               onClick={handleStop}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 36, height: 36, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
               title="Stop"
             >
-              <Square size={18} />
+              <Square size={14} />
             </button>
 
             <button
               onClick={handlePause}
               className="flex items-center justify-center rounded-full transition-all hover:scale-105 active:scale-95"
               style={{
-                width: 68, height: 68,
+                width: 54, height: 54,
                 background: '#fff',
-                boxShadow: '0 0 0 8px rgb(var(--accent-rgb) / 0.20), 0 8px 32px rgba(0,0,0,0.5)',
+                boxShadow: '0 0 0 6px rgb(var(--accent-rgb) / 0.20), 0 6px 24px rgba(0,0,0,0.5)',
               }}
             >
               {isPlaying
-                ? <Pause size={24} style={{ color: '#000' }} />
-                : <Play  size={24} style={{ color: '#000', marginLeft: 3 }} />}
+                ? <Pause size={18} style={{ color: '#000' }} />
+                : <Play  size={18} style={{ color: '#000', marginLeft: 2 }} />}
             </button>
 
             <button
               onClick={handleSkip}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
-              style={{ width: 44, height: 44, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ width: 36, height: 36, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
               title="Skip"
             >
-              <SkipForward size={18} />
+              <SkipForward size={14} />
             </button>
           </div>
         </>
