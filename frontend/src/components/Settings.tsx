@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Users, Lock, Sun, Moon, Plus, X } from 'lucide-react'
-import { getSongRequestSetting, setSongRequestSetting, type Guild } from '@/lib/api'
+import { getSongRequestSetting, setSongRequestSetting, setAccentColor, type Guild } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const ACCENT_PRESETS = [
   { label: 'Purple', rgb: '168 85 247',  darkRgb: '147 51 234' },
+  { label: 'Indigo', rgb: '99 102 241',  darkRgb: '79 70 229'  },
   { label: 'Blue',   rgb: '59 130 246',  darkRgb: '37 99 235'  },
   { label: 'Cyan',   rgb: '6 182 212',   darkRgb: '8 145 178'  },
+  { label: 'Teal',   rgb: '20 184 166',  darkRgb: '13 148 136' },
   { label: 'Green',  rgb: '34 197 94',   darkRgb: '22 163 74'  },
+  { label: 'Lime',   rgb: '132 204 22',  darkRgb: '101 163 13' },
+  { label: 'Yellow', rgb: '234 179 8',   darkRgb: '202 138 4'  },
   { label: 'Orange', rgb: '249 115 22',  darkRgb: '234 88 12'  },
+  { label: 'Red',    rgb: '239 68 68',   darkRgb: '220 38 38'  },
+  { label: 'Rose',   rgb: '244 63 94',   darkRgb: '225 29 72'  },
   { label: 'Pink',   rgb: '236 72 153',  darkRgb: '219 39 119' },
 ]
 
@@ -69,6 +75,9 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
   const handleAccentPick = (preset: typeof ACCENT_PRESETS[number]) => {
     setAccent(preset)
     applyAccent(preset)
+    if (guildId) {
+      setAccentColor(token, guildId, JSON.stringify(preset)).catch(() => null)
+    }
   }
 
   const available = guilds.filter(g => !selectedIds.includes(g.id))

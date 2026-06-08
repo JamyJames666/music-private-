@@ -31,6 +31,7 @@ export interface PlayerStatus {
   spotifyHasMore:    boolean
   hasBulkImport:     boolean
   pendingPreview: Array<{ title: string; artist: string }>
+  accentColor:    string | null
 }
 
 // ── Client ───────────────────────────────────────────────────────────────────
@@ -150,4 +151,7 @@ export const getSongRequestSetting = (t: string, guildId: string) =>
   req<{open: boolean}>('GET', `/api/guilds/${guildId}/settings/song-requests`, t)
 export const setSongRequestSetting = (t: string, guildId: string, open: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/song-requests`, t, {open})
+
+export const setAccentColor = (t: string, guildId: string, accentColor: string) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/accent`, t, {accentColor})
 

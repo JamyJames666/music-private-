@@ -244,13 +244,24 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     localStorage.setItem('muse_theme', theme)
   }, [theme])
 
-  // Apply saved accent colour on mount
+  // Apply saved accent colour on mount (fast fallback before first status poll)
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('muse_accent') ?? 'null') as typeof ACCENT_PRESETS[number] | null
       if (saved?.rgb) applyAccent(saved)
     } catch { /* use CSS default */ }
   }, [])
+
+  // Apply server accent when it arrives — overrides localStorage so all clients stay in sync
+  const appliedAccentRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!status?.accentColor || status.accentColor === appliedAccentRef.current) return
+    appliedAccentRef.current = status.accentColor
+    try {
+      const preset = JSON.parse(status.accentColor) as typeof ACCENT_PRESETS[number] | null
+      if (preset?.rgb) applyAccent(preset)
+    } catch { /* ignore bad data */ }
+  }, [status?.accentColor])
 
   // Load all guilds
   useEffect(() => {
@@ -425,6 +436,12 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
             {/* Divider */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
 
+            {/* Bot Settings section */}
+            <BotSettings token={token} guildId={primaryGuildId} />
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
             {/* Bulk Import section */}
             <BulkImport
               token={token}
@@ -524,10 +541,10 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className={viewMode === 'video' ? 'pt-3 pb-1' : 'px-6 pt-4 pb-2'}>
+              <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-8 pt-6 pb-4'}>
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
-              <div className="flex flex-col gap-2 px-6 pb-4">
+              <div className="flex flex-col gap-3 px-8 pb-6">
                 {/* Art / Video toggle — always shown when player is active */}
                 {status && status.status !== 'IDLE' && (
                   <div className="flex items-center gap-2 py-1">
@@ -585,7 +602,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   </div>
                 )}
 
-                <BotSettings token={token} guildId={primaryGuildId} />
               </div>
             </div>
           </div>

@@ -320,6 +320,25 @@ export default class WebServer {
       }
     });
 
+    this.app.post('/api/guilds/:guildId/settings/accent', auth, async (req: express.Request, res: express.Response) => {
+      const {accentColor} = req.body as {accentColor?: string};
+      if (typeof accentColor !== 'string') {
+        res.status(400).json({error: 'accentColor (string) is required'});
+        return;
+      }
+
+      try {
+        await prisma.setting.upsert({
+          where: {guildId: req.params.guildId},
+          create: {guildId: req.params.guildId, accentColor},
+          update: {accentColor},
+        });
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
     // Play endpoint: admin token always allowed; when songRequestsOpen is true,
     // unauthenticated requests are also allowed (anyone with the URL can queue songs).
     this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {
@@ -425,9 +444,10 @@ export default class WebServer {
       }
     });
 
-    this.app.get('/api/guilds/:guildId/status', auth, (req: express.Request, res: express.Response) => {
+    this.app.get('/api/guilds/:guildId/status', auth, async (req: express.Request, res: express.Response) => {
       const player = this.playerManager.get(req.params.guildId);
       const current = player.getCurrent();
+      const settings = await getGuildSettings(req.params.guildId).catch(() => null);
       res.json({
         status: STATUS[player.status],
         nowPlaying: current
@@ -472,6 +492,7 @@ export default class WebServer {
 
           return player.spotifyPlaylistContext !== null;
         })(),
+        accentColor: settings?.accentColor ?? null,
       });
     });
 
