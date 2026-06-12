@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X, ImageIcon, Video } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, bulkLogin,
+  getGuilds, getChannels, getStatus, pause, resume, skip, seek, bulkLogin,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
 import { applyAccent, ACCENT_PRESETS } from './Settings'
+import { extractAccentFromImage } from '@/lib/album-color'
+import CrossfadeImage from './CrossfadeImage'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
 import AddToQueue from './AddToQueue'
@@ -259,6 +261,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     localStorage.setItem('muse_theme', theme)
   }, [theme])
 
+  // Auto accent mode — the UI colour-way follows the current album art
+  const [autoAccent, setAutoAccent] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem('muse_accent') ?? 'null') as { rgb?: string } | null)?.rgb === 'auto' } catch { return false }
+  })
+
   // Apply saved accent colour on mount (fast fallback before first status poll)
   useEffect(() => {
     try {
@@ -274,9 +281,27 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     appliedAccentRef.current = status.accentColor
     try {
       const preset = JSON.parse(status.accentColor) as typeof ACCENT_PRESETS[number] | null
-      if (preset?.rgb) applyAccent(preset)
+      if (preset?.rgb === 'auto') {
+        setAutoAccent(true)
+      } else if (preset?.rgb) {
+        setAutoAccent(false)
+        applyAccent(preset)
+      }
     } catch { /* ignore bad data */ }
   }, [status?.accentColor])
+
+  // In auto mode, re-tint the accent from the current track's album art
+  const nowPlayingThumb = status?.nowPlaying?.thumbnailUrl ?? null
+  useEffect(() => {
+    if (!autoAccent || !nowPlayingThumb) return
+    let cancelled = false
+    extractAccentFromImage(nowPlayingThumb).then(c => {
+      if (cancelled || !c) return
+      document.documentElement.style.setProperty('--accent-rgb', c.rgb)
+      document.documentElement.style.setProperty('--accent-dark-rgb', c.darkRgb)
+    })
+    return () => { cancelled = true }
+  }, [autoAccent, nowPlayingThumb])
 
   // Load all guilds
   useEffect(() => {
@@ -362,6 +387,40 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [poll])
+
+  // Keyboard shortcuts — Space play/pause, ←/→ seek 10s, N skip.
+  // Ignored while typing or when the admin view / password modal is up.
+  const statusRef = useRef(status)
+  statusRef.current = status
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (view !== 'player' || showAdminPw || !primaryGuildId) return
+      const s = statusRef.current
+      if (!s || s.status === 'IDLE') return
+
+      if (e.code === 'Space') {
+        e.preventDefault()
+        const playing = s.status === 'PLAYING'
+        setStatus(prev => (prev ? { ...prev, status: playing ? 'PAUSED' : 'PLAYING' } : prev))
+        ;(playing ? pause(token, primaryGuildId) : resume(token, primaryGuildId)).catch(() => null).then(poll)
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const len = s.nowPlaying?.length ?? 0
+        if (len === 0) return
+        e.preventDefault()
+        const delta = e.key === 'ArrowRight' ? 10 : -10
+        const target = Math.max(0, Math.min(len, Math.round(smoothPositionRef.current + delta)))
+        smoothPositionRef.current = target
+        seek(token, primaryGuildId, target).catch(() => null).then(poll)
+      } else if (e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        skip(token, primaryGuildId).catch(() => null).then(poll)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [view, showAdminPw, token, primaryGuildId, poll])
 
   const addGuild = (id: string) => {
     const next = [...selectedGuildIds.filter(g => g !== id), id].slice(0, MAX_GUILDS)
@@ -546,26 +605,23 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           </div>
         )
       ) : (
-        <div className="relative flex overflow-hidden" style={{ height: 'calc(100vh - 53px)' }}>
+        <div className="relative flex flex-col lg:flex-row lg:overflow-hidden lg:h-[calc(100vh-53px)]">
 
           {status?.nowPlaying?.thumbnailUrl && (
-            <div
-              key={status.nowPlaying.thumbnailUrl}
+            <CrossfadeImage
+              src={status.nowPlaying.thumbnailUrl}
               className="absolute inset-0 pointer-events-none animate-fade-in"
-              style={{
-                backgroundImage:    `url(${status.nowPlaying.thumbnailUrl})`,
-                backgroundSize:     'cover',
-                backgroundPosition: 'center',
-                filter:             'blur(80px) saturate(2.2) brightness(1.3)',
-                opacity:            0.32,
-                transform:          'scale(1.1)',
-                zIndex:             0,
+              imgStyle={{
+                filter:    'blur(80px) saturate(2.2) brightness(1.3)',
+                opacity:   0.32,
+                transform: 'scale(1.1)',
               }}
+              duration={900}
             />
           )}
 
           {/* Left: Now Playing */}
-          <div className="w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
+          <div className="w-full lg:w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
             <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
               style={{
                 top: 40, width: 420, height: 420,
@@ -616,7 +672,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           </div>
 
           {/* Right: Queue + optional secondary guild card */}
-          <div className="w-1/2 flex flex-col overflow-hidden" style={{ zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="w-full lg:w-1/2 flex flex-col overflow-hidden border-t lg:border-t-0 lg:border-l border-white/[0.07]" style={{ zIndex: 1 }}>
             {secondaryGuildId && secondaryGuild && (
               <SecondaryGuildCard
                 token={token}

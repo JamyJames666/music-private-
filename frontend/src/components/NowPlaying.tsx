@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, SkipForward, Square, Music } from 'lucide-react'
-import { pause, resume, skip, stop, type PlayerStatus } from '@/lib/api'
+import { Play, Pause, SkipForward, Square, Music, Repeat, Repeat1, Volume2 } from 'lucide-react'
+import { pause, resume, skip, stop, setVolume, toggleLoopSong, toggleLoopQueue, type PlayerStatus } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
+import CrossfadeImage from './CrossfadeImage'
 
 interface Props {
   status: PlayerStatus | null
@@ -15,13 +16,14 @@ interface Props {
 }
 
 export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange, viewMode, videoStartPos }: Props) {
-  const [localPos, setLocalPos] = useState(0)
-  const [localLen, setLocalLen] = useState(0)
-  const [songUrl,  setSongUrl]  = useState('')
-  const tickRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Playback clock lives in refs and paints straight to the DOM at 60fps —
+  // React only re-renders when the status payload itself changes.
+  const playback    = useRef({ pos: 0, len: 0, rate: 1, playing: false, url: '' })
+  const barRef      = useRef<HTMLDivElement>(null)
+  const elapsedRef  = useRef<HTMLSpanElement>(null)
+  const rafRef      = useRef<number | null>(null)
+  const lastTsRef   = useRef<number | null>(null)
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
-
-  const stopTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
 
   // Seek the embedded YouTube player without remounting the iframe
   const seekYT = (pos: number) => {
@@ -31,47 +33,102 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     )
   }
 
+  const paint = useCallback(() => {
+    const pb = playback.current
+    const pct = pb.len > 0 ? Math.min(100, (pb.pos / pb.len) * 100) : 0
+    if (barRef.current) barRef.current.style.width = `${pct}%`
+    if (elapsedRef.current) elapsedRef.current.textContent = fmtTime(pb.pos)
+  }, [])
+
   useEffect(() => {
-    if (!status?.nowPlaying) { stopTick(); return }
+    const frame = (ts: number) => {
+      const pb = playback.current
+      if (lastTsRef.current !== null && pb.playing && pb.len > 0) {
+        pb.pos = Math.min(pb.pos + ((ts - lastTsRef.current) / 1000) * pb.rate, pb.len)
+        paint()
+        onPositionChange?.(pb.pos)
+      }
+      lastTsRef.current = ts
+      rafRef.current = requestAnimationFrame(frame)
+    }
+    rafRef.current = requestAnimationFrame(frame)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [paint]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync the local clock with the server on every poll
+  useEffect(() => {
+    const pb = playback.current
+    if (!status?.nowPlaying) {
+      pb.playing = false
+      pb.pos = 0
+      pb.len = 0
+      pb.url = ''
+      paint()
+      return
+    }
     const np = status.nowPlaying
-    const playing = status.status === 'PLAYING'
     const srvPos = status.position ?? 0
-    if (np.url !== songUrl) {
-      setSongUrl(np.url); setLocalPos(srvPos); setLocalLen(np.length); stopTick()
+    pb.rate = status.speed ?? 1
+    pb.len = np.length
+    pb.playing = status.status === 'PLAYING'
+    if (np.url !== pb.url) {
+      pb.url = np.url
+      pb.pos = srvPos
       onPositionChange?.(srvPos)
     } else {
-      setLocalLen(np.length)
-      const diff = srvPos - localPos
-      const shouldSync = srvPos > 0 && (diff > 3 || diff < -3) && !(srvPos < 5 && localPos > 10)
+      const diff = srvPos - pb.pos
+      const shouldSync = srvPos > 0 && Math.abs(diff) > 3 && !(srvPos < 5 && pb.pos > 10)
       if (shouldSync) {
-        setLocalPos(srvPos)
+        pb.pos = srvPos
         onPositionChange?.(srvPos)
         seekYT(srvPos)
       }
     }
-    if (playing && !tickRef.current) {
-      const rate = status.speed ?? 1
-      tickRef.current = setInterval(() => setLocalPos(p => {
-        const next = Math.min(p + rate, np.length)
-        onPositionChange?.(next)
-        return next
-      }), 1000)
-    } else if (!playing) { stopTick() }
-    return stopTick
+    paint()
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Optimistic play/pause — flip the button instantly, server state catches up
-  // on the next poll (and clears the override once it matches).
+  // Optimistic play/pause — flip instantly, server state catches up on the next
+  // poll and clears the override once it matches.
   const [optimisticPlaying, setOptimisticPlaying] = useState<boolean | null>(null)
   const serverPlaying = status?.status === 'PLAYING'
   useEffect(() => {
     if (optimisticPlaying !== null && serverPlaying === optimisticPlaying) setOptimisticPlaying(null)
   }, [serverPlaying, optimisticPlaying])
 
+  // Optimistic loop toggles
+  const [optimisticLoop, setOptimisticLoop] = useState<{ song?: boolean; queue?: boolean }>({})
+  useEffect(() => {
+    setOptimisticLoop(o => {
+      const next = { ...o }
+      if (o.song !== undefined && status?.loopSong === o.song) delete next.song
+      if (o.queue !== undefined && status?.loopQueue === o.queue) delete next.queue
+      return next.song === o.song && next.queue === o.queue ? o : next
+    })
+  }, [status?.loopSong, status?.loopQueue])
+  const loopSong  = optimisticLoop.song ?? status?.loopSong ?? false
+  const loopQueue = optimisticLoop.queue ?? status?.loopQueue ?? false
+
+  // Optimistic + debounced volume
+  const [optimisticVolume, setOptimisticVolume] = useState<number | null>(null)
+  const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const serverVolume = status?.volume ?? 100
+  useEffect(() => {
+    if (optimisticVolume !== null && serverVolume === optimisticVolume) setOptimisticVolume(null)
+  }, [serverVolume, optimisticVolume])
+  const volume = optimisticVolume ?? serverVolume
+  const handleVolume = (v: number) => {
+    setOptimisticVolume(v)
+    if (volTimer.current) clearTimeout(volTimer.current)
+    volTimer.current = setTimeout(() => {
+      setVolume(token, guildId, v).then(onRefresh).catch(() => setOptimisticVolume(null))
+    }, 250)
+  }
+
   const isPlaying = optimisticPlaying ?? serverPlaying
   const active    = status?.status === 'PLAYING' || status?.status === 'PAUSED'
   const np        = status?.nowPlaying ?? null
-  const pct       = localLen > 0 ? Math.min(100, (localPos / localLen) * 100) : 0
+  const pb        = playback.current
+  const pct       = pb.len > 0 ? Math.min(100, (pb.pos / pb.len) * 100) : 0
   const ytIdFromUrl = (url: string | undefined) => {
     if (!url) return null
     const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
@@ -85,24 +142,42 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const handlePause = async () => {
     const wasPlaying = isPlaying
     setOptimisticPlaying(!wasPlaying)
+    playback.current.playing = !wasPlaying
     try { await (wasPlaying ? pause(token, guildId) : resume(token, guildId)) }
-    catch { setOptimisticPlaying(null) }
+    catch { setOptimisticPlaying(null); playback.current.playing = wasPlaying }
     onRefresh()
   }
   const handleSkip  = async () => { await skip(token, guildId).catch(() => null); onRefresh() }
   const handleStop  = async () => { await stop(token, guildId).catch(() => null); onRefresh() }
 
+  const handleLoopSong = async () => {
+    setOptimisticLoop(o => ({ ...o, song: !loopSong }))
+    try { await toggleLoopSong(token, guildId) } catch { setOptimisticLoop(o => ({ ...o, song: undefined })) }
+    onRefresh()
+  }
+  const handleLoopQueue = async () => {
+    setOptimisticLoop(o => ({ ...o, queue: !loopQueue }))
+    try { await toggleLoopQueue(token, guildId) } catch { setOptimisticLoop(o => ({ ...o, queue: undefined })) }
+    onRefresh()
+  }
+
   const progressRef = useRef<HTMLDivElement>(null)
   const handleSeek  = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active || localLen === 0) return
+    const pbc = playback.current
+    if (!active || pbc.len === 0) return
     const r = progressRef.current?.getBoundingClientRect(); if (!r) return
-    const pos = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * localLen)
-    setLocalPos(pos)
+    const pos = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * pbc.len)
+    pbc.pos = pos
+    paint()
     seekYT(pos)
     const {seek: seekFn} = await import('@/lib/api')
     await seekFn(token, guildId, pos).catch(() => null)
     onRefresh()
-  }, [active, localLen, token, guildId, onRefresh])
+  }, [active, token, guildId, onRefresh, paint])
+
+  const loopBtnStyle = (on: boolean) => on
+    ? { width: 32, height: 32, color: 'rgb(var(--accent-rgb))', background: 'rgb(var(--accent-rgb) / 0.15)', border: '1px solid rgb(var(--accent-rgb) / 0.4)' }
+    : { width: 32, height: 32, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }
 
   return (
     <div className={cn('relative flex flex-col items-center z-10 w-full', !isVideo && 'max-w-lg mx-auto')}>
@@ -154,15 +229,16 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
             ) : (
               <>
                 {np?.thumbnailUrl ? (
-                  <img
+                  <CrossfadeImage
                     src={np.thumbnailUrl}
                     alt={np.title}
-                    className="w-full rounded-3xl object-cover"
+                    className="w-full rounded-3xl"
                     style={{
                       aspectRatio: '1',
                       boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
                     }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    imgClassName="rounded-3xl"
+                    duration={700}
                   />
                 ) : (
                   <div
@@ -208,7 +284,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               style={{ height: 4, background: 'rgba(255,255,255,0.12)' }}
             >
               <div
-                className="h-full rounded-full transition-[width] duration-1000"
+                ref={barRef}
+                className="h-full rounded-full"
                 style={{
                   width: `${pct}%`,
                   background: 'linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent-dark-rgb)))',
@@ -217,13 +294,22 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               />
             </div>
             <div className="flex justify-between text-xs mt-1.5" style={{ color: '#555' }}>
-              <span>{fmtTime(localPos)}</span>
-              <span>{fmtTime(localLen)}</span>
+              <span ref={elapsedRef}>{fmtTime(pb.pos)}</span>
+              <span>{fmtTime(np?.length ?? 0)}</span>
             </div>
           </div>
 
           {/* Controls */}
           <div className="flex items-center gap-4 z-10">
+            <button
+              onClick={handleLoopQueue}
+              className="flex items-center justify-center rounded-full transition-all hover:scale-110"
+              style={loopBtnStyle(loopQueue)}
+              title={loopQueue ? 'Loop queue: on' : 'Loop queue: off'}
+            >
+              <Repeat size={13} />
+            </button>
+
             <button
               onClick={handleStop}
               className="flex items-center justify-center rounded-full transition-all hover:scale-110"
@@ -243,6 +329,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                 background: '#fff',
                 boxShadow: '0 0 0 6px rgb(var(--accent-rgb) / 0.20), 0 6px 24px rgba(0,0,0,0.5)',
               }}
+              title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
             >
               {isPlaying
                 ? <Pause size={18} style={{ color: '#000' }} />
@@ -255,10 +342,38 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               style={{ width: 36, height: 36, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
-              title="Skip"
+              title="Skip (N)"
             >
               <SkipForward size={14} />
             </button>
+
+            <button
+              onClick={handleLoopSong}
+              className="flex items-center justify-center rounded-full transition-all hover:scale-110"
+              style={loopBtnStyle(loopSong)}
+              title={loopSong ? 'Loop song: on' : 'Loop song: off'}
+            >
+              <Repeat1 size={13} />
+            </button>
+          </div>
+
+          {/* Volume */}
+          <div
+            className={cn('flex items-center gap-2.5 z-10 mt-3 w-full', isVideo ? 'px-0' : 'px-6')}
+            style={isVideo ? undefined : { maxWidth: 380 }}
+          >
+            <Volume2 size={14} style={{ color: '#666' }} className="flex-shrink-0" />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={volume}
+              onChange={e => handleVolume(Number(e.target.value))}
+              className="vol-slider flex-1"
+              style={{ '--vol': `${volume}%` } as React.CSSProperties}
+              aria-label="Volume"
+            />
+            <span className="text-xs tabular-nums w-9 text-right flex-shrink-0" style={{ color: '#666' }}>{volume}%</span>
           </div>
         </>
       )}

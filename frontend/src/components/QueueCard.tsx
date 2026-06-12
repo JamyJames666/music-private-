@@ -368,8 +368,8 @@ function QueueCard({
         </div>
       )}
 
-      {/* Queue list — scrollable */}
-      <div className="flex-1 overflow-y-auto px-6 min-h-0">
+      {/* Queue list — scrollable; capped height when stacked below the player on mobile */}
+      <div className="flex-1 overflow-y-auto px-6 min-h-0 max-h-[70vh] lg:max-h-none">
         {displayQueue.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-14 h-14 rounded-xl bg-app-panel flex items-center justify-center">

@@ -3,6 +3,9 @@ import { Users, Lock, Sun, Moon, Plus, X } from 'lucide-react'
 import { getSongRequestSetting, setSongRequestSetting, setAccentColor, type Guild } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
+// Sentinel preset — accent follows the current album art instead of a fixed colour
+const AUTO_ACCENT = { label: 'Auto', rgb: 'auto', darkRgb: 'auto' }
+
 const ACCENT_PRESETS = [
   { label: 'Purple', rgb: '168 85 247',  darkRgb: '147 51 234' },
   { label: 'Indigo', rgb: '99 102 241',  darkRgb: '79 70 229'  },
@@ -19,8 +22,10 @@ const ACCENT_PRESETS = [
 ]
 
 function applyAccent(preset: typeof ACCENT_PRESETS[number]) {
-  document.documentElement.style.setProperty('--accent-rgb', preset.rgb)
-  document.documentElement.style.setProperty('--accent-dark-rgb', preset.darkRgb)
+  if (preset.rgb !== 'auto') {
+    document.documentElement.style.setProperty('--accent-rgb', preset.rgb)
+    document.documentElement.style.setProperty('--accent-dark-rgb', preset.darkRgb)
+  }
   localStorage.setItem('muse_accent', JSON.stringify(preset))
 }
 
@@ -37,7 +42,7 @@ interface Props {
   onSetPrimary: (id: string) => void
 }
 
-export { applyAccent, ACCENT_PRESETS }
+export { applyAccent, ACCENT_PRESETS, AUTO_ACCENT }
 
 export default function Settings({ token, guildId, guildName, theme, onThemeChange, guilds, selectedIds, onAddGuild, onRemoveGuild, onSetPrimary }: Props) {
   const [songRequestsOpen, setSongRequestsOpen] = useState<boolean | null>(null)
@@ -111,9 +116,26 @@ export default function Settings({ token, guildId, guildName, theme, onThemeChan
         <div className="space-y-3">
           <div>
             <p className="text-sm font-medium text-white">Accent colour</p>
-            <p className="text-xs mt-0.5" style={{ color: '#666' }}>Changes buttons, highlights and interactive elements</p>
+            <p className="text-xs mt-0.5" style={{ color: '#666' }}>Changes buttons, highlights and interactive elements. Auto re-tints the UI to match the current album art.</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
+            {(() => {
+              const isAuto = accent.rgb === 'auto'
+              return (
+                <button
+                  onClick={() => handleAccentPick(AUTO_ACCENT)}
+                  title="Auto — match album art"
+                  className="w-8 h-8 rounded-full transition-all flex items-center justify-center text-[8px] font-bold text-white"
+                  style={{
+                    background: 'conic-gradient(from 0deg, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #6366f1, #a855f7, #f43f5e)',
+                    boxShadow: isAuto ? '0 0 0 2px #0e0c1c, 0 0 0 4px rgb(var(--accent-rgb))' : 'none',
+                    transform: isAuto ? 'scale(1.15)' : 'scale(1)',
+                  }}
+                >
+                  AUTO
+                </button>
+              )
+            })()}
             {ACCENT_PRESETS.map(preset => {
               const isActive = accent.rgb === preset.rgb
               const hex = `rgb(${preset.rgb.replace(/ /g, ',')})`

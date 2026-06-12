@@ -54,6 +54,44 @@
   input[type='range']:focus::-webkit-slider-thumb {
     @apply ring-2 ring-app-accent ring-offset-1 ring-offset-app-surface;
   }
+
+  /* Player volume slider — accent-filled track up to the current value */
+  input[type='range'].vol-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(90deg,
+      rgb(var(--accent-rgb)) var(--vol, 50%),
+      rgba(255, 255, 255, 0.12) var(--vol, 50%));
+  }
+  input[type='range'].vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 11px;
+    margin-top: -3.5px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px rgb(var(--accent-rgb) / 0.7);
+    cursor: pointer;
+  }
+  input[type='range'].vol-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  input[type='range'].vol-slider::-moz-range-progress {
+    height: 4px;
+    border-radius: 9999px;
+    background: rgb(var(--accent-rgb));
+  }
+  input[type='range'].vol-slider::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px rgb(var(--accent-rgb) / 0.7);
+    cursor: pointer;
+  }
 }
 
 @keyframes lazy-ready-glow {
