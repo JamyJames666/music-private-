@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -52,14 +52,15 @@ function titleToGradient(title: string): string {
 interface RowProps {
   id: string
   item: TrackInfo
+  index: number
   displayNumber: number
-  onRemove: () => void
-  onMoveToTop: () => void
+  onRemove: (index: number) => void
+  onMoveToTop: (index: number) => void
   draggable: boolean
   isUpNext?: boolean
 }
 
-function QueueRow({ id, item, displayNumber, onRemove, onMoveToTop, draggable, isUpNext }: RowProps) {
+const QueueRow = memo(function QueueRow({ id, item, index, displayNumber, onRemove, onMoveToTop, draggable, isUpNext }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, disabled: !draggable })
 
@@ -156,7 +157,7 @@ function QueueRow({ id, item, displayNumber, onRemove, onMoveToTop, draggable, i
           style={{ color: '#888' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}
-          onClick={onMoveToTop}
+          onClick={() => onMoveToTop(index)}
           title="Play next"
         >
           <ChevronsUp size={14} />
@@ -170,14 +171,14 @@ function QueueRow({ id, item, displayNumber, onRemove, onMoveToTop, draggable, i
         style={{ color: '#888' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f43f5e' }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}
-        onClick={onRemove}
+        onClick={() => onRemove(index)}
         title="Remove"
       >
         <X size={14} />
       </button>
     </li>
   )
-}
+})
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 
@@ -188,12 +189,11 @@ interface Props {
   onRefresh: () => void
   pendingCount?: number
   nowPlaying?: TrackInfo | null
-  position?: number
   isPlaying?: boolean
 }
 
-export default function QueueCard({
-  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, position: _pos = 0, isPlaying = false,
+function QueueCard({
+  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, isPlaying = false,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')
@@ -201,6 +201,9 @@ export default function QueueCard({
   const [bringingToQueue, setBringingToQueue] = useState(false)
 
   const displayQueue = optimisticQueue ?? queue
+  // Ref mirror so row callbacks can stay referentially stable (keeps QueueRow memo effective)
+  const displayQueueRef = useRef(displayQueue)
+  displayQueueRef.current = displayQueue
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -246,20 +249,20 @@ export default function QueueCard({
   const handleClearQueue   = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
   const handleDisconnect   = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
 
-  const handleRemove = async (originalIndex: number) => {
-    setOptimisticQueue(displayQueue.filter((_, i) => i !== originalIndex))
+  const handleRemove = useCallback(async (originalIndex: number) => {
+    setOptimisticQueue(displayQueueRef.current.filter((_, i) => i !== originalIndex))
     try { await remove(token, guildId, originalIndex + 1) }
     finally { setOptimisticQueue(null); onRefresh() }
-  }
+  }, [token, guildId, onRefresh])
 
-  const handleMoveToTop = async (originalIndex: number) => {
-    const next = [...displayQueue]
+  const handleMoveToTop = useCallback(async (originalIndex: number) => {
+    const next = [...displayQueueRef.current]
     const [song] = next.splice(originalIndex, 1)
     next.unshift(song)
     setOptimisticQueue(next)
     try { await move(token, guildId, originalIndex + 1, 1) }
     finally { setOptimisticQueue(null); onRefresh() }
-  }
+  }, [token, guildId, onRefresh])
 
   const handleBringToQueue = async () => {
     setBringingToQueue(true)
@@ -425,11 +428,12 @@ export default function QueueCard({
                     key={`${item.url}-${originalIndex}`}
                     id={String(originalIndex)}
                     item={item}
+                    index={originalIndex}
                     displayNumber={originalIndex + 1}
                     draggable={!isSearching}
                     isUpNext={!isSearching && originalIndex === 0}
-                    onRemove={() => handleRemove(originalIndex)}
-                    onMoveToTop={() => handleMoveToTop(originalIndex)}
+                    onRemove={handleRemove}
+                    onMoveToTop={handleMoveToTop}
                   />
                 ))}
               </ul>
@@ -448,3 +452,5 @@ export default function QueueCard({
     </div>
   )
 }
+
+export default memo(QueueCard)

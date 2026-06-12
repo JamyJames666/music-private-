@@ -37,6 +37,9 @@ export default {
           from: { opacity: '0', transform: 'translateY(6px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
         },
+        'fade-in': {
+          from: { opacity: '0' },
+        },
         'slide-down': {
           from: { opacity: '0', transform: 'translateY(-8px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
@@ -51,6 +54,7 @@ export default {
         'bar-2':       'bar 0.9s ease-in-out 0.2s infinite',
         'bar-3':       'bar 0.9s ease-in-out 0.4s infinite',
         'fade-up':     'fade-up 0.25s ease-out',
+        'fade-in':     'fade-in 0.5s ease-out',
         'slide-down':  'slide-down 0.2s ease-out',
         shimmer:       'shimmer 1.5s linear infinite',
       },

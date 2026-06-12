@@ -111,9 +111,20 @@ function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, on
       try { setStatus(await getStatus(token, guildId)) } catch { /* non-fatal */ }
     }
     poll()
-    const t = setInterval(poll, 3000)
-    return () => clearInterval(t)
+    let t: ReturnType<typeof setInterval> | null = setInterval(poll, 3000)
+    const onVisibility = () => {
+      if (t) { clearInterval(t); t = null }
+      if (!document.hidden) { poll(); t = setInterval(poll, 3000) }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      if (t) clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [token, guildId])
+
+  const setOptimisticStatus = (s: PlayerStatus['status']) =>
+    setStatus(prev => (prev ? { ...prev, status: s } : prev))
 
   const np = status?.nowPlaying
 
@@ -169,12 +180,12 @@ function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, on
       <div className="flex items-center gap-2">
         {status?.status === 'PLAYING' ? (
           <button
-            onClick={() => pause(token, guildId).catch(() => null)}
+            onClick={() => { setOptimisticStatus('PAUSED'); pause(token, guildId).catch(() => setOptimisticStatus('PLAYING')) }}
             className="text-xs px-2.5 py-1 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
           >Pause</button>
         ) : status?.status === 'PAUSED' ? (
           <button
-            onClick={() => resume(token, guildId).catch(() => null)}
+            onClick={() => { setOptimisticStatus('PLAYING'); resume(token, guildId).catch(() => setOptimisticStatus('PAUSED')) }}
             className="text-xs px-2.5 py-1 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
           >Resume</button>
         ) : null}
@@ -195,6 +206,7 @@ function SecondaryGuildCard({ token, guildId, guildName, channels, channelId, on
 }
 
 const MAX_GUILDS = 2
+const EMPTY_QUEUE: PlayerStatus['queue'] = []
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 
@@ -214,15 +226,18 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const [primaryChannelId,  setPrimaryChannelId]  = useState<string>('')
   const [secondaryChannelId, setSecondaryChannelId] = useState<string>('')
 
-  const [status,         setStatus]         = useState<PlayerStatus | null>(null)
-  const [smoothPosition, setSmoothPosition] = useState(0)
+  const [status, setStatus] = useState<PlayerStatus | null>(null)
+  // Smooth playback position lives in a ref — it ticks every second and would
+  // otherwise re-render the entire tree. Only read when switching to video mode.
+  const smoothPositionRef = useRef(0)
+  const handlePositionChange = useCallback((pos: number) => { smoothPositionRef.current = pos }, [])
   const [view, setView] = useState<'player' | 'admin'>('player')
   const [viewMode, setViewMode] = useState<'art' | 'video'>(() =>
     (localStorage.getItem('muse_view_mode') ?? 'art') as 'art' | 'video',
   )
   const [videoStartPos, setVideoStartPos] = useState(0)
   const switchView = (mode: 'art' | 'video') => {
-    if (mode === 'video') setVideoStartPos(Math.floor(smoothPosition))
+    if (mode === 'video') setVideoStartPos(Math.floor(smoothPositionRef.current))
     setViewMode(mode)
     localStorage.setItem('muse_view_mode', mode)
   }
@@ -308,10 +323,21 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Keep queue/nowPlaying object references stable across polls when their
+  // contents haven't changed, so memoized children can skip re-rendering.
+  const stableQueueRef = useRef<{ json: string; value: PlayerStatus['queue'] }>({ json: '', value: [] })
+  const stableNpRef    = useRef<{ json: string; value: PlayerStatus['nowPlaying'] }>({ json: '', value: null })
+
   const poll = useCallback(async () => {
     if (!primaryGuildId) return
     try {
       const s = await getStatus(token, primaryGuildId)
+      const queueJson = JSON.stringify(s.queue)
+      if (queueJson === stableQueueRef.current.json) s.queue = stableQueueRef.current.value
+      else stableQueueRef.current = { json: queueJson, value: s.queue }
+      const npJson = JSON.stringify(s.nowPlaying)
+      if (npJson === stableNpRef.current.json) s.nowPlaying = stableNpRef.current.value
+      else stableNpRef.current = { json: npJson, value: s.nowPlaying }
       setStatus(s)
       onReconnecting(false)
     } catch (err) {
@@ -326,7 +352,15 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   useEffect(() => {
     poll()
     pollRef.current = setInterval(poll, 2000)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+    const onVisibility = () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      if (!document.hidden) { poll(); pollRef.current = setInterval(poll, 2000) }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [poll])
 
   const addGuild = (id: string) => {
@@ -542,7 +576,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
               <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-6 pt-4 pb-2'}>
-                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={setSmoothPosition} viewMode={viewMode} videoStartPos={videoStartPos} />
+                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={handlePositionChange} viewMode={viewMode} videoStartPos={videoStartPos} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
                 {/* Art / Video toggle — always shown when player is active */}
@@ -595,13 +629,12 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               />
             )}
             <QueueCard
-              queue={status?.queue ?? []}
+              queue={status?.queue ?? EMPTY_QUEUE}
               token={token}
               guildId={primaryGuildId}
               onRefresh={poll}
               pendingCount={status?.pendingCount ?? 0}
               nowPlaying={status?.nowPlaying ?? null}
-              position={smoothPosition}
               isPlaying={status?.status === 'PLAYING'}
             />
           </div>

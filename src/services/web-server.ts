@@ -447,6 +447,7 @@ export default class WebServer {
     this.app.get('/api/guilds/:guildId/status', auth, async (req: express.Request, res: express.Response) => {
       const player = this.playerManager.get(req.params.guildId);
       const current = player.getCurrent();
+      const queue = player.getQueue();
       const settings = await getGuildSettings(req.params.guildId).catch(() => null);
       res.json({
         status: STATUS[player.status],
@@ -461,7 +462,7 @@ export default class WebServer {
           }
           : null,
         position: player.getPosition(),
-        queue: player.getQueue().map(s => ({
+        queue: queue.map(s => ({
           title: s.title,
           artist: s.artist,
           length: s.length,
@@ -483,9 +484,9 @@ export default class WebServer {
         spotifyHasMore: (() => {
           // Restore context from queue if it was lost on restart
           if (!player.spotifyPlaylistContext) {
-            const s = player.getQueue().find(q => q.playlist?.source?.includes('open.spotify.com/playlist'));
+            const s = queue.find(q => q.playlist?.source?.includes('open.spotify.com/playlist'));
             if (s?.playlist) {
-              const count = player.getQueue().filter(q => q.playlist?.source === s.playlist!.source).length;
+              const count = queue.filter(q => q.playlist?.source === s.playlist!.source).length;
               player.spotifyPlaylistContext = {url: s.playlist.source, loadedCount: count};
             }
           }

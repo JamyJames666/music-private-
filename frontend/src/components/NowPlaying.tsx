@@ -60,7 +60,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     return stopTick
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPlaying = status?.status === 'PLAYING'
+  // Optimistic play/pause — flip the button instantly, server state catches up
+  // on the next poll (and clears the override once it matches).
+  const [optimisticPlaying, setOptimisticPlaying] = useState<boolean | null>(null)
+  const serverPlaying = status?.status === 'PLAYING'
+  useEffect(() => {
+    if (optimisticPlaying !== null && serverPlaying === optimisticPlaying) setOptimisticPlaying(null)
+  }, [serverPlaying, optimisticPlaying])
+
+  const isPlaying = optimisticPlaying ?? serverPlaying
   const active    = status?.status === 'PLAYING' || status?.status === 'PAUSED'
   const np        = status?.nowPlaying ?? null
   const pct       = localLen > 0 ? Math.min(100, (localPos / localLen) * 100) : 0
@@ -74,7 +82,13 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const videoId = ytIdFromUrl(np?.url)
   const isVideo = viewMode === 'video' && !!videoId
 
-  const handlePause = async () => { await (isPlaying ? pause(token, guildId) : resume(token, guildId)).catch(() => null); onRefresh() }
+  const handlePause = async () => {
+    const wasPlaying = isPlaying
+    setOptimisticPlaying(!wasPlaying)
+    try { await (wasPlaying ? pause(token, guildId) : resume(token, guildId)) }
+    catch { setOptimisticPlaying(null) }
+    onRefresh()
+  }
   const handleSkip  = async () => { await skip(token, guildId).catch(() => null); onRefresh() }
   const handleStop  = async () => { await stop(token, guildId).catch(() => null); onRefresh() }
 

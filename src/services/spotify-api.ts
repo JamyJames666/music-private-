@@ -16,6 +16,9 @@ export interface SpotifyTrack {
 @injectable()
 export default class {
   private readonly spotify: Spotify;
+  // Anonymous embed tokens are valid ~1 hour; cache briefly so paging through a
+  // large playlist doesn't re-scrape the embed HTML for every 50-track page.
+  private embedTokenCache: {token: string; expiresAt: number} | null = null;
 
   constructor(@inject(TYPES.ThirdParty) thirdParty: ThirdParty) {
     this.spotify = thirdParty.spotify;
@@ -76,7 +79,7 @@ export default class {
   }
 
   // Public: fetch up to batchSize tracks starting at startOffset.
-  // Each 50-song page gets its own fresh embed token.
+  // Pages share a cached embed token; a fresh one is only scraped on expiry or 429.
   async getPlaylistFrom(url: string, startOffset: number, batchSize: number): Promise<SpotifyTrack[]> {
     const uri = spotifyURI.parse(url) as spotifyURI.Playlist;
     const PAGE = 50;
@@ -96,7 +99,7 @@ export default class {
       if (i < pages - 1) {
         // eslint-disable-next-line no-await-in-loop
         await new Promise<void>(resolve => {
-          setTimeout(resolve, 600);
+          setTimeout(resolve, 250);
         });
       }
     }
@@ -120,7 +123,16 @@ export default class {
     );
   }
 
-  private async freshEmbedToken(playlistId: string): Promise<string | null> {
+  private async freshEmbedToken(playlistId: string, force = false): Promise<string | null> {
+    if (!force && this.embedTokenCache && Date.now() < this.embedTokenCache.expiresAt) {
+      return this.embedTokenCache.token;
+    }
+
+    const cacheAndReturn = (token: string): string => {
+      this.embedTokenCache = {token, expiresAt: Date.now() + (4 * 60_000)};
+      return token;
+    };
+
     const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -139,13 +151,13 @@ export default class {
         const match = /<script id="__NEXT_DATA__"[^>]*>([^<]+)<\/script>/.exec(html);
         const token = match ? (/"accessToken":"([^"]+)"/.exec(match[1])?.[1] ?? null) : null;
         if (token) {
-          return token;
+          return cacheAndReturn(token);
         }
 
         // eslint-disable-next-line no-await-in-loop
         const anonToken = await this.getAnonymousToken(BROWSER_UA);
         if (anonToken) {
-          return anonToken;
+          return cacheAndReturn(anonToken);
         }
       } catch { /* retry */ }
     }
@@ -189,7 +201,7 @@ export default class {
             setTimeout(resolve, 5000);
           });
           // eslint-disable-next-line no-await-in-loop
-          token = await this.freshEmbedToken(playlistId) ?? token;
+          token = await this.freshEmbedToken(playlistId, true) ?? token;
         } else {
           return {tracks: [], hasMore: false};
         }
