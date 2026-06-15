@@ -18,9 +18,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Shuffle, GripVertical, X, Music, Trash2, ListMusic,
-  ChevronsUp, Search, ListPlus, LogOut,
+  ChevronsUp, Search, ListPlus, LogOut, SkipForward,
 } from 'lucide-react'
-import { shuffle, clearQueue, move, remove, flushPending, disconnect, type TrackInfo } from '@/lib/api'
+import { shuffle, clearQueue, move, remove, flushPending, disconnect, skip, type TrackInfo } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 // fmtDuration kept for compatibility
 const _fmtDuration = fmtTime; void _fmtDuration
@@ -190,10 +190,11 @@ interface Props {
   pendingCount?: number
   nowPlaying?: TrackInfo | null
   isPlaying?: boolean
+  playerStatus?: string
 }
 
 function QueueCard({
-  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, isPlaying = false,
+  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, isPlaying = false, playerStatus,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')
@@ -278,6 +279,18 @@ function QueueCard({
       <div className="flex items-center gap-3 px-8 pt-8 pb-3 flex-shrink-0">
         <ListMusic size={14} className="flex-shrink-0 text-app-accent" />
         <h2 className="text-sm font-semibold">Up Next</h2>
+
+        {/* Idle skip — visible when player is IDLE and queue has songs */}
+        {playerStatus === 'IDLE' && displayQueue.length > 0 && (
+          <button
+            onClick={async () => { await skip(token, guildId).catch(() => null); onRefresh() }}
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all active:scale-95"
+            style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }}
+            title="Player is idle — click to start next song"
+          >
+            <SkipForward size={11} /> Play next
+          </button>
+        )}
 
         {/* Song count + duration */}
         {displayQueue.length > 0 ? (

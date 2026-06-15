@@ -247,8 +247,8 @@ export const updateYtDlp = async (): Promise<YtDlpUpdateResult> => {
 };
 
 export const PLAYER_CLIENT_ATTEMPTS = [
-  'tv_embedded,android_vr,web',
-  'tv_embedded,web',
+  'ios,mweb',
+  'ios,web',
   'mweb,web',
   'web',
 ];

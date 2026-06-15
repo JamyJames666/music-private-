@@ -692,6 +692,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               pendingCount={status?.pendingCount ?? 0}
               nowPlaying={status?.nowPlaying ?? null}
               isPlaying={status?.status === 'PLAYING'}
+              playerStatus={status?.status}
             />
           </div>
 
