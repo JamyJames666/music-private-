@@ -37,6 +37,7 @@ model Setting {
   announcementChannelId               String?
   songRequestsOpen                    Boolean  @default(true)
   accentColor                         String?
+  webOnlyMode                         Boolean  @default(false)
   createdAt                           DateTime @default(now())
   updatedAt                           DateTime @updatedAt
 }

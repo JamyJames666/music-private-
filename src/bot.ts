@@ -10,6 +10,7 @@ import handleVoiceStateUpdate from './events/voice-state-update.js';
 import errorMsg from './utils/error-msg.js';
 import {isUserInVoice} from './utils/channels.js';
 import Config from './services/config.js';
+import {getGuildSettings} from './utils/get-guild-settings.js';
 import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
 import {Routes} from 'discord-api-types/v10';
@@ -58,7 +59,12 @@ export default class {
     this.client.on('interactionCreate', async interaction => {
       try {
         if (interaction.isCommand()) {
-          if (this.config.ADMIN_ONLY || this.config.WEB_ONLY_MODE) {
+          const guildSettings = interaction.guildId
+            ? await getGuildSettings(interaction.guildId).catch(() => null)
+            : null;
+          const webOnlyActive = this.config.WEB_ONLY_MODE
+            || Boolean((guildSettings as unknown as {webOnlyMode?: boolean} | null)?.webOnlyMode);
+          if (this.config.ADMIN_ONLY || webOnlyActive) {
             if (interaction.isChatInputCommand()) {
               const msg = this.config.ADMIN_ONLY
                 ? '🔒 Admin only mode is enabled. Discord commands are disabled — use the web dashboard.'

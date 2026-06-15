@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Settings, Check, Users } from 'lucide-react'
+import { ChevronDown, Settings, Check, Users, Globe } from 'lucide-react'
 import {
   getTextChannels,
   getAnnouncementChannel,
   setAnnouncementChannel,
   getSongRequestSetting,
   setSongRequestSetting,
+  getWebOnlyMode,
+  setWebOnlyMode,
   type Channel,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -60,18 +62,24 @@ export default function BotSettings({ token, guildId }: Props) {
   const [srSaving,         setSrSaving]         = useState(false)
   const [srSaved,          setSrSaved]          = useState(false)
 
+  const [webOnlyMode, setWebOnlyModeState] = useState(false)
+  const [womSaving,   setWomSaving]        = useState(false)
+  const [womSaved,    setWomSaved]         = useState(false)
+
   const load = useCallback(async () => {
     if (!guildId) return
     setLoading(true)
     try {
-      const [chs, setting, sr] = await Promise.all([
+      const [chs, setting, sr, wom] = await Promise.all([
         getTextChannels(token, guildId),
         getAnnouncementChannel(token, guildId),
         getSongRequestSetting(token, guildId).catch(() => ({ open: true })),
+        getWebOnlyMode(token, guildId).catch(() => ({ enabled: false })),
       ])
       setChannels(chs)
       setCurrent(setting.announcementChannelId)
       setSongRequestsOpen(sr.open)
+      setWebOnlyModeState(wom.enabled)
     } catch {
       /* non-fatal */
     } finally {
@@ -109,6 +117,21 @@ export default function BotSettings({ token, guildId }: Props) {
       setSongRequestsOpen(!open)
     } finally {
       setSrSaving(false)
+    }
+  }
+
+  const handleWebOnlyMode = async (enabled: boolean) => {
+    setWebOnlyModeState(enabled)
+    setWomSaving(true)
+    setWomSaved(false)
+    try {
+      await setWebOnlyMode(token, guildId, enabled)
+      setWomSaved(true)
+      setTimeout(() => setWomSaved(false), 2000)
+    } catch {
+      setWebOnlyModeState(!enabled)
+    } finally {
+      setWomSaving(false)
     }
   }
 
@@ -190,6 +213,25 @@ export default function BotSettings({ token, guildId }: Props) {
         <div className="flex items-center gap-2 flex-shrink-0">
           {srSaved && <Check size={12} className="text-green-400" />}
           <Toggle checked={songRequestsOpen} onChange={handleSongRequests} disabled={srSaving} />
+        </div>
+      </div>
+
+      <div className="border-t border-app-border" />
+
+      {/* Web-only mode */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Globe size={13} className="flex-shrink-0 text-app-muted" />
+          <div>
+            <p className="text-sm text-app-text">Web-only mode</p>
+            <p className="text-xs text-app-border">
+              When on, Discord slash commands are disabled — control via dashboard only
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {womSaved && <Check size={12} className="text-green-400" />}
+          <Toggle checked={webOnlyMode} onChange={handleWebOnlyMode} disabled={womSaving} />
         </div>
       </div>
     </div>

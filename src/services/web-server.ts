@@ -133,6 +133,7 @@ export default class WebServer {
   private readonly client: Client;
   private readonly getSongs: GetSongs;
   private readonly spotifyApi?: SpotifyApi;
+  private readonly sseClients = new Map<string, Set<express.Response>>();
 
   // eslint-disable-next-line max-params
   constructor(
@@ -339,8 +340,52 @@ export default class WebServer {
       }
     });
 
+    this.app.get('/api/guilds/:guildId/settings/web-only-mode', auth, async (req: express.Request, res: express.Response) => {
+      const settings = await getGuildSettings(req.params.guildId);
+      res.json({enabled: (settings as unknown as {webOnlyMode?: boolean}).webOnlyMode ?? false});
+    });
+
+    this.app.post('/api/guilds/:guildId/settings/web-only-mode', auth, async (req: express.Request, res: express.Response) => {
+      const {enabled} = req.body as {enabled?: boolean};
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({error: 'enabled (boolean) is required'});
+        return;
+      }
+
+      try {
+        await prisma.setting.upsert({
+          where: {guildId: req.params.guildId},
+          create: {guildId: req.params.guildId, webOnlyMode: enabled},
+          update: {webOnlyMode: enabled},
+        });
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    // SSE endpoint — unauthenticated (sends no private data, only a trigger signal)
+    this.app.get('/api/guilds/:guildId/events', (req: express.Request, res: express.Response) => {
+      const {guildId} = req.params;
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      if (!this.sseClients.has(guildId)) {
+        this.sseClients.set(guildId, new Set());
+      }
+
+      this.sseClients.get(guildId)!.add(res);
+
+      res.on('close', () => {
+        this.sseClients.get(guildId)?.delete(res);
+      });
+    });
+
     // Play endpoint: admin token always allowed; when songRequestsOpen is true,
     // unauthenticated requests are also allowed (anyone with the URL can queue songs).
+    // eslint-disable-next-line complexity
     this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {
       const header = req.headers.authorization ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -438,6 +483,7 @@ export default class WebServer {
           }
         }
 
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true, added: songs.length, first: songs[0].title});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -500,6 +546,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/pause', auth, (req: express.Request, res: express.Response) => {
       try {
         this.playerManager.get(req.params.guildId).pause();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -509,6 +556,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/resume', auth, async (req: express.Request, res: express.Response) => {
       try {
         await this.playerManager.get(req.params.guildId).play();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -518,6 +566,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/skip', auth, async (req: express.Request, res: express.Response) => {
       try {
         await this.playerManager.get(req.params.guildId).forward(1);
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -527,6 +576,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/stop', auth, (req: express.Request, res: express.Response) => {
       try {
         this.playerManager.get(req.params.guildId).stop();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -546,8 +596,8 @@ export default class WebServer {
       try {
         const player = this.playerManager.get(req.params.guildId);
         player.shuffleQueue();
-        // Fetch Deezer thumbnails for any songs that just shuffled into view
         player.prefetchThumbnails();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -558,6 +608,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/queue/clear', auth, async (req: express.Request, res: express.Response) => {
       try {
         await this.playerManager.get(req.params.guildId).clearQueue();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -573,6 +624,7 @@ export default class WebServer {
 
       try {
         this.playerManager.get(req.params.guildId).move(from, to);
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -588,6 +640,7 @@ export default class WebServer {
 
       try {
         this.playerManager.get(req.params.guildId).removeFromQueue(index);
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -599,8 +652,8 @@ export default class WebServer {
       try {
         const player = this.playerManager.get(req.params.guildId);
         player.flushPending(typeof count === 'number' ? count : 100);
-        // Fetch Deezer thumbnails for the newly loaded songs
         player.prefetchThumbnails();
+        this.broadcastUpdate(req.params.guildId);
         res.json({ok: true});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
@@ -961,6 +1014,18 @@ export default class WebServer {
     createServer(this.app).listen(this.port, () => {
       console.log(`Web dashboard running on port ${this.port}`);
     });
+  }
+
+  private broadcastUpdate(guildId: string): void {
+    const clients = this.sseClients.get(guildId);
+    if (!clients || clients.size === 0) {
+      return;
+    }
+
+    const payload = 'event: update\ndata: {}\n\n';
+    for (const res of clients) {
+      res.write(payload);
+    }
   }
 
   private generateToken(secret = this.password): string {

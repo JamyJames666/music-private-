@@ -111,6 +111,7 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
       ['defaultQueuePageSize', 'INTEGER NOT NULL DEFAULT 10'],
       ['turnDownVolumeWhenPeopleSpeak', 'BOOLEAN NOT NULL DEFAULT false'],
       ['turnDownVolumeWhenPeopleSpeakTarget', 'INTEGER NOT NULL DEFAULT 20'],
+      ['webOnlyMode', 'BOOLEAN NOT NULL DEFAULT false'],
     ].filter(([col]) => !existing.has(col)) as Array<[string, string]>;
 
     for (const [col, def] of missing) {

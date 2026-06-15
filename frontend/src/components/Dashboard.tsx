@@ -377,6 +377,14 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     }
   }, [poll])
 
+  // SSE: instantly refresh when server signals a queue/player state change
+  useEffect(() => {
+    if (!primaryGuildId) return
+    const es = new EventSource(`/api/guilds/${primaryGuildId}/events`)
+    es.addEventListener('update', () => { void poll() })
+    return () => es.close()
+  }, [primaryGuildId, poll])
+
   // Keyboard shortcuts — Space play/pause, ←/→ seek 10s, N skip.
   // Ignored while typing or when the admin view / password modal is up.
   const statusRef = useRef(status)

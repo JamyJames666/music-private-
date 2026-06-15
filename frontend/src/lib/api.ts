@@ -155,3 +155,8 @@ export const setSongRequestSetting = (t: string, guildId: string, open: boolean)
 export const setAccentColor = (t: string, guildId: string, accentColor: string) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/accent`, t, {accentColor})
 
+export const getWebOnlyMode = (t: string, guildId: string) =>
+  req<{enabled: boolean}>('GET', `/api/guilds/${guildId}/settings/web-only-mode`, t)
+export const setWebOnlyMode = (t: string, guildId: string, enabled: boolean) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/web-only-mode`, t, {enabled})
+
