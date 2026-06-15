@@ -364,6 +364,30 @@ export default class WebServer {
       }
     });
 
+    this.app.get('/api/guilds/:guildId/settings/admin-only', auth, async (req: express.Request, res: express.Response) => {
+      const settings = await getGuildSettings(req.params.guildId);
+      res.json({enabled: (settings as unknown as {adminOnly?: boolean}).adminOnly ?? false});
+    });
+
+    this.app.post('/api/guilds/:guildId/settings/admin-only', auth, async (req: express.Request, res: express.Response) => {
+      const {enabled} = req.body as {enabled?: boolean};
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({error: 'enabled (boolean) is required'});
+        return;
+      }
+
+      try {
+        await prisma.setting.upsert({
+          where: {guildId: req.params.guildId},
+          create: {guildId: req.params.guildId, adminOnly: enabled},
+          update: {adminOnly: enabled},
+        });
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
     // SSE endpoint — unauthenticated (sends no private data, only a trigger signal)
     this.app.get('/api/guilds/:guildId/events', (req: express.Request, res: express.Response) => {
       const {guildId} = req.params;
@@ -385,13 +409,16 @@ export default class WebServer {
 
     // Play endpoint: admin token always allowed; when songRequestsOpen is true,
     // unauthenticated requests are also allowed (anyone with the URL can queue songs).
+    // adminOnly overrides songRequestsOpen and requires a valid token for all requests.
     // eslint-disable-next-line complexity
     this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {
       const header = req.headers.authorization ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
       if (!this.verifyToken(token)) {
         const settings = await getGuildSettings(req.params.guildId);
-        if (!((settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true)) {
+        const isAdminOnly = (settings as unknown as {adminOnly?: boolean}).adminOnly ?? false;
+        const isOpen = (settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true;
+        if (isAdminOnly || !isOpen) {
           res.status(401).json({error: 'Unauthorized'});
           return;
         }

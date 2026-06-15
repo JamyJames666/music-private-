@@ -160,3 +160,8 @@ export const getWebOnlyMode = (t: string, guildId: string) =>
 export const setWebOnlyMode = (t: string, guildId: string, enabled: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/web-only-mode`, t, {enabled})
 
+export const getAdminOnly = (t: string, guildId: string) =>
+  req<{enabled: boolean}>('GET', `/api/guilds/${guildId}/settings/admin-only`, t)
+export const setAdminOnly = (t: string, guildId: string, enabled: boolean) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/admin-only`, t, {enabled})
+

@@ -62,12 +62,13 @@ export default class {
           const guildSettings = interaction.guildId
             ? await getGuildSettings(interaction.guildId).catch(() => null)
             : null;
-          const webOnlyActive = this.config.WEB_ONLY_MODE
-            || Boolean((guildSettings as unknown as {webOnlyMode?: boolean} | null)?.webOnlyMode);
-          if (this.config.ADMIN_ONLY || webOnlyActive) {
+          const s = guildSettings as unknown as {webOnlyMode?: boolean; adminOnly?: boolean} | null;
+          const adminOnlyActive = this.config.ADMIN_ONLY || Boolean(s?.adminOnly);
+          const webOnlyActive = this.config.WEB_ONLY_MODE || Boolean(s?.webOnlyMode);
+          if (adminOnlyActive || webOnlyActive) {
             if (interaction.isChatInputCommand()) {
-              const msg = this.config.ADMIN_ONLY
-                ? '🔒 Admin only mode is enabled. Discord commands are disabled — use the web dashboard.'
+              const msg = adminOnlyActive
+                ? '🔒 Admin-only mode is enabled. Only the server admin can control this bot.'
                 : '🔒 Discord commands are disabled — use the web dashboard to control the bot.';
               await interaction.reply({content: msg, ephemeral: true});
             }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Settings, Check, Users, Globe } from 'lucide-react'
+import { ChevronDown, Settings, Check, Users, Globe, ShieldOff } from 'lucide-react'
 import {
   getTextChannels,
   getAnnouncementChannel,
@@ -8,6 +8,8 @@ import {
   setSongRequestSetting,
   getWebOnlyMode,
   setWebOnlyMode,
+  getAdminOnly,
+  setAdminOnly,
   type Channel,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -66,20 +68,26 @@ export default function BotSettings({ token, guildId }: Props) {
   const [womSaving,   setWomSaving]        = useState(false)
   const [womSaved,    setWomSaved]         = useState(false)
 
+  const [adminOnly,   setAdminOnlyState]   = useState(false)
+  const [aoSaving,    setAoSaving]         = useState(false)
+  const [aoSaved,     setAoSaved]          = useState(false)
+
   const load = useCallback(async () => {
     if (!guildId) return
     setLoading(true)
     try {
-      const [chs, setting, sr, wom] = await Promise.all([
+      const [chs, setting, sr, wom, ao] = await Promise.all([
         getTextChannels(token, guildId),
         getAnnouncementChannel(token, guildId),
         getSongRequestSetting(token, guildId).catch(() => ({ open: true })),
         getWebOnlyMode(token, guildId).catch(() => ({ enabled: false })),
+        getAdminOnly(token, guildId).catch(() => ({ enabled: false })),
       ])
       setChannels(chs)
       setCurrent(setting.announcementChannelId)
       setSongRequestsOpen(sr.open)
       setWebOnlyModeState(wom.enabled)
+      setAdminOnlyState(ao.enabled)
     } catch {
       /* non-fatal */
     } finally {
@@ -132,6 +140,21 @@ export default function BotSettings({ token, guildId }: Props) {
       setWebOnlyModeState(!enabled)
     } finally {
       setWomSaving(false)
+    }
+  }
+
+  const handleAdminOnly = async (enabled: boolean) => {
+    setAdminOnlyState(enabled)
+    setAoSaving(true)
+    setAoSaved(false)
+    try {
+      await setAdminOnly(token, guildId, enabled)
+      setAoSaved(true)
+      setTimeout(() => setAoSaved(false), 2000)
+    } catch {
+      setAdminOnlyState(!enabled)
+    } finally {
+      setAoSaving(false)
     }
   }
 
@@ -232,6 +255,25 @@ export default function BotSettings({ token, guildId }: Props) {
         <div className="flex items-center gap-2 flex-shrink-0">
           {womSaved && <Check size={12} className="text-green-400" />}
           <Toggle checked={webOnlyMode} onChange={handleWebOnlyMode} disabled={womSaving} />
+        </div>
+      </div>
+
+      <div className="border-t border-app-border" />
+
+      {/* Admin-only mode */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <ShieldOff size={13} className="flex-shrink-0 text-app-muted" />
+          <div>
+            <p className="text-sm text-app-text">Admin-only mode</p>
+            <p className="text-xs text-app-border">
+              When on, only logged-in admins can use any feature — Discord commands and open song requests are both blocked
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {aoSaved && <Check size={12} className="text-green-400" />}
+          <Toggle checked={adminOnly} onChange={handleAdminOnly} disabled={aoSaving} />
         </div>
       </div>
     </div>
