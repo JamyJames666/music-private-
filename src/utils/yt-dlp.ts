@@ -413,21 +413,30 @@ const extractFirstSearchResult = (raw: YtDlpRawSearchResult): YtDlpSearchResult 
 };
 
 export const searchWithYtDlp = async (query: string): Promise<YtDlpSearchResult | null> => {
-  try {
-    const {stdout} = await execa(getExecutable(), [
-      '--dump-single-json',
-      '--no-playlist',
-      '--skip-download',
-      '--no-warnings',
-      '--no-cache-dir',
-      `ytsearch1:${query}`,
-    ], {
-      timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
-    });
+  for (const clients of PLAYER_CLIENT_ATTEMPTS) {
+    try {
+      const {stdout} = await execa(getExecutable(), [ // eslint-disable-line no-await-in-loop
+        '--dump-single-json',
+        '--no-playlist',
+        '--skip-download',
+        '--no-warnings',
+        '--no-cache-dir',
+        '--extractor-args',
+        `youtube:player_client=${clients}`,
+        `ytsearch1:${query}`,
+      ], {
+        timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
+      });
 
-    const raw = JSON.parse(stdout) as YtDlpRawSearchResult;
-    return extractFirstSearchResult(raw);
-  } catch {
-    return null;
+      const raw = JSON.parse(stdout) as YtDlpRawSearchResult;
+      const result = extractFirstSearchResult(raw);
+      if (result) {
+        return result;
+      }
+    } catch {
+      // Try next client set
+    }
   }
+
+  return null;
 };
