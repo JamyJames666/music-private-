@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
-import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X, ImageIcon, Video } from 'lucide-react'
+import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X } from 'lucide-react'
 import {
   getGuilds, getChannels, getStatus, pause, resume, skip, seek, bulkLogin,
   ApiError,
@@ -229,20 +229,9 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const [secondaryChannelId, setSecondaryChannelId] = useState<string>('')
 
   const [status, setStatus] = useState<PlayerStatus | null>(null)
-  // Smooth playback position lives in a ref — it ticks every second and would
-  // otherwise re-render the entire tree. Only read when switching to video mode.
   const smoothPositionRef = useRef(0)
   const handlePositionChange = useCallback((pos: number) => { smoothPositionRef.current = pos }, [])
   const [view, setView] = useState<'player' | 'admin'>('player')
-  const [viewMode, setViewMode] = useState<'art' | 'video'>(() =>
-    (localStorage.getItem('muse_view_mode') ?? 'art') as 'art' | 'video',
-  )
-  const [videoStartPos, setVideoStartPos] = useState(0)
-  const switchView = (mode: 'art' | 'video') => {
-    if (mode === 'video') setVideoStartPos(Math.floor(smoothPositionRef.current))
-    setViewMode(mode)
-    localStorage.setItem('muse_view_mode', mode)
-  }
 
   // Admin unlock — bulkToken stored in localStorage (never the raw password)
   const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
@@ -631,32 +620,10 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className={viewMode === 'video' ? 'pt-4 pb-2' : 'px-6 pt-4 pb-2'}>
-                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={handlePositionChange} viewMode={viewMode} videoStartPos={videoStartPos} />
+              <div className="px-6 pt-4 pb-2">
+                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={handlePositionChange} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">
-                {/* Art / Video toggle — always shown when player is active */}
-                {status && status.status !== 'IDLE' && (
-                  <div className="flex items-center gap-2 py-1">
-                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#aaa' }}>View</span>
-                    <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}>
-                      <button
-                        onClick={() => switchView('art')}
-                        className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
-                        style={viewMode === 'art' ? { background: 'rgb(var(--accent-rgb) / 0.7)', color: '#fff', boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.4)' } : { color: '#ccc' }}
-                      >
-                        <ImageIcon size={11} /> Art
-                      </button>
-                      <button
-                        onClick={() => switchView('video')}
-                        className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-all font-semibold"
-                        style={viewMode === 'video' ? { background: 'rgb(var(--accent-rgb) / 0.7)', color: '#fff', boxShadow: '0 0 8px rgb(var(--accent-rgb) / 0.4)' } : { color: '#ccc' }}
-                      >
-                        <Video size={11} /> Video
-                      </button>
-                    </div>
-                  </div>
-                )}
                 <AddToQueue
                   token={token}
                   guildId={primaryGuildId}

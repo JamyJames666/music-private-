@@ -11,27 +11,14 @@ interface Props {
   guildId: string
   onRefresh: () => void
   onPositionChange?: (pos: number) => void
-  viewMode: 'art' | 'video'
-  videoStartPos: number
 }
 
-export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange, viewMode, videoStartPos }: Props) {
-  // Playback clock lives in refs and paints straight to the DOM at 60fps —
-  // React only re-renders when the status payload itself changes.
-  const playback    = useRef({ pos: 0, len: 0, rate: 1, playing: false, url: '' })
-  const barRef      = useRef<HTMLDivElement>(null)
-  const elapsedRef  = useRef<HTMLSpanElement>(null)
-  const rafRef      = useRef<number | null>(null)
-  const lastTsRef   = useRef<number | null>(null)
-  const ytIframeRef = useRef<HTMLIFrameElement>(null)
-
-  // Seek the embedded YouTube player without remounting the iframe
-  const seekYT = (pos: number) => {
-    ytIframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: 'seekTo', args: [pos, true] }),
-      'https://www.youtube.com',
-    )
-  }
+export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange }: Props) {
+  const playback   = useRef({ pos: 0, len: 0, rate: 1, playing: false, url: '' })
+  const barRef     = useRef<HTMLDivElement>(null)
+  const elapsedRef = useRef<HTMLSpanElement>(null)
+  const rafRef     = useRef<number | null>(null)
+  const lastTsRef  = useRef<number | null>(null)
 
   const paint = useCallback(() => {
     const pb = playback.current
@@ -55,7 +42,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
   }, [paint]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync the local clock with the server on every poll
   useEffect(() => {
     const pb = playback.current
     if (!status?.nowPlaying) {
@@ -81,21 +67,17 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       if (shouldSync) {
         pb.pos = srvPos
         onPositionChange?.(srvPos)
-        seekYT(srvPos)
       }
     }
     paint()
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Optimistic play/pause — flip instantly, server state catches up on the next
-  // poll and clears the override once it matches.
   const [optimisticPlaying, setOptimisticPlaying] = useState<boolean | null>(null)
   const serverPlaying = status?.status === 'PLAYING'
   useEffect(() => {
     if (optimisticPlaying !== null && serverPlaying === optimisticPlaying) setOptimisticPlaying(null)
   }, [serverPlaying, optimisticPlaying])
 
-  // Optimistic loop toggles
   const [optimisticLoop, setOptimisticLoop] = useState<{ song?: boolean; queue?: boolean }>({})
   useEffect(() => {
     setOptimisticLoop(o => {
@@ -108,7 +90,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const loopSong  = optimisticLoop.song ?? status?.loopSong ?? false
   const loopQueue = optimisticLoop.queue ?? status?.loopQueue ?? false
 
-  // Optimistic + debounced volume
   const [optimisticVolume, setOptimisticVolume] = useState<number | null>(null)
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const serverVolume = status?.volume ?? 100
@@ -129,15 +110,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const np        = status?.nowPlaying ?? null
   const pb        = playback.current
   const pct       = pb.len > 0 ? Math.min(100, (pb.pos / pb.len) * 100) : 0
-  const ytIdFromUrl = (url: string | undefined) => {
-    if (!url) return null
-    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
-    if (m) return m[1]
-    if (!url.startsWith('http') && !url.includes('/') && url.length === 11) return url
-    return null
-  }
-  const videoId = ytIdFromUrl(np?.url)
-  const isVideo = viewMode === 'video' && !!videoId
 
   const handlePause = async () => {
     const wasPlaying = isPlaying
@@ -169,7 +141,6 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     const pos = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * pbc.len)
     pbc.pos = pos
     paint()
-    seekYT(pos)
     const {seek: seekFn} = await import('@/lib/api')
     await seekFn(token, guildId, pos).catch(() => null)
     onRefresh()
@@ -180,9 +151,9 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     : { width: 32, height: 32, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }
 
   return (
-    <div className={cn('relative flex flex-col items-center z-10 w-full', !isVideo && 'max-w-lg mx-auto')}>
+    <div className="relative flex flex-col items-center z-10 w-full max-w-lg mx-auto">
 
-      {/* Big ambient glow — pulsing when playing */}
+      {/* Ambient glow */}
       <div
         className="absolute pointer-events-none transition-opacity duration-700"
         style={{
@@ -214,55 +185,38 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
         </div>
       ) : (
         <>
-          {/* Media area — full width in video mode, capped at 480 in art mode */}
-          <div className="relative z-10 mt-2 mb-2 w-full" style={isVideo ? undefined : { maxWidth: 480 }}>
-            {isVideo ? (
-              <iframe
-                ref={ytIframeRef}
-                key={`${videoId}-${videoStartPos}`}
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${videoStartPos}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
-                className="w-full rounded-2xl"
-                style={{ aspectRatio: '16/9', border: 'none', display: 'block', boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)' }}
-                allow="autoplay; encrypted-media; fullscreen"
-                allowFullScreen
+          {/* Album art */}
+          <div className="relative z-10 mt-2 mb-2 w-full" style={{ maxWidth: 480 }}>
+            {np?.thumbnailUrl ? (
+              <CrossfadeImage
+                src={np.thumbnailUrl}
+                alt={np.title}
+                className="w-full rounded-3xl"
+                style={{
+                  aspectRatio: '1',
+                  boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
+                }}
+                imgClassName="rounded-3xl"
+                duration={700}
               />
             ) : (
-              <>
-                {np?.thumbnailUrl ? (
-                  <CrossfadeImage
-                    src={np.thumbnailUrl}
-                    alt={np.title}
-                    className="w-full rounded-3xl"
-                    style={{
-                      aspectRatio: '1',
-                      boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
-                    }}
-                    imgClassName="rounded-3xl"
-                    duration={700}
-                  />
-                ) : (
-                  <div
-                    className="w-full rounded-3xl flex items-center justify-center"
-                    style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
-                  >
-                    <Music size={72} style={{ color: 'rgb(var(--accent-dark-rgb))' }} />
-                  </div>
-                )}
-                {/* Animated bars — bottom right corner */}
-                <div className={cn('absolute bottom-4 right-4 flex items-end gap-[3px] h-5', !isPlaying && 'opacity-0')}>
-                  <span className="block w-1 rounded-sm animate-bar"   style={{ background: 'rgba(255,255,255,0.8)' }} />
-                  <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
-                  <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
-                </div>
-              </>
+              <div
+                className="w-full rounded-3xl flex items-center justify-center"
+                style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
+              >
+                <Music size={72} style={{ color: 'rgb(var(--accent-dark-rgb))' }} />
+              </div>
             )}
+            {/* Animated bars */}
+            <div className={cn('absolute bottom-4 right-4 flex items-end gap-[3px] h-5', !isPlaying && 'opacity-0')}>
+              <span className="block w-1 rounded-sm animate-bar"   style={{ background: 'rgba(255,255,255,0.8)' }} />
+              <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
+              <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
+            </div>
           </div>
 
           {/* Title + artist */}
-          <div
-            className={cn('text-center w-full z-10', isVideo ? 'px-3' : 'px-6')}
-            style={isVideo ? undefined : { maxWidth: 380 }}
-          >
+          <div className="text-center w-full z-10 px-6" style={{ maxWidth: 380 }}>
             <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 17 }} title={np?.title}>
               {np?.title ?? '—'}
             </p>
@@ -273,10 +227,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Progress bar */}
-          <div
-            className={cn('w-full z-10 mt-2 mb-3', isVideo ? 'px-0' : 'px-6')}
-            style={isVideo ? undefined : { maxWidth: 380 }}
-          >
+          <div className="w-full z-10 mt-2 mb-3 px-6" style={{ maxWidth: 380 }}>
             <div
               ref={progressRef}
               onClick={handleSeek}
@@ -358,10 +309,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Volume */}
-          <div
-            className={cn('flex items-center gap-2.5 z-10 mt-3 w-full', isVideo ? 'px-0' : 'px-6')}
-            style={isVideo ? undefined : { maxWidth: 380 }}
-          >
+          <div className="flex items-center gap-2.5 z-10 mt-3 w-full px-6" style={{ maxWidth: 380 }}>
             <Volume2 size={14} style={{ color: '#666' }} className="flex-shrink-0" />
             <input
               type="range"
