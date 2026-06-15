@@ -628,7 +628,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 zIndex: 0,
               }} />
             <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className="px-6 pt-4 pb-2">
+              <div className="px-4 pt-4 pb-2">
                 <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={handlePositionChange} />
               </div>
               <div className="flex flex-col gap-3 px-8 pb-6">

@@ -151,7 +151,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
     : { width: 32, height: 32, color: '#555', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }
 
   return (
-    <div className="relative flex flex-col items-center z-10 w-full max-w-lg mx-auto">
+    <div className="relative flex flex-col items-center z-10 w-full">
 
       {/* Ambient glow */}
       <div
@@ -160,8 +160,8 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           top: -20,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: 480,
-          height: 480,
+          width: 600,
+          height: 600,
           background: active
             ? 'radial-gradient(circle, rgb(var(--accent-rgb) / 0.45) 0%, rgb(var(--accent-dark-rgb) / 0.22) 40%, transparent 70%)'
             : 'radial-gradient(circle, rgba(80,40,120,0.15) 0%, transparent 70%)',
@@ -173,10 +173,10 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       />
 
       {!active ? (
-        <div className="flex flex-col items-center gap-5 py-12 z-10">
+        <div className="flex flex-col items-center gap-5 py-12 z-10 w-full">
           <div
-            className="rounded-3xl flex items-center justify-center"
-            style={{ width: '100%', maxWidth: 480, aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)' }}
+            className="rounded-3xl flex items-center justify-center w-full"
+            style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#1a1a2e,#16162a)', maxHeight: '55vh' }}
           >
             <Music size={72} style={{ color: '#333' }} />
           </div>
@@ -186,7 +186,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
       ) : (
         <>
           {/* Album art */}
-          <div className="relative z-10 mt-2 mb-2 w-full" style={{ maxWidth: 480 }}>
+          <div className="relative z-10 mt-2 mb-2 w-full" style={{ maxHeight: '55vh' }}>
             {np?.thumbnailUrl ? (
               <CrossfadeImage
                 src={np.thumbnailUrl}
@@ -194,6 +194,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                 className="w-full rounded-3xl"
                 style={{
                   aspectRatio: '1',
+                  maxHeight: '55vh',
                   boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
                 }}
                 imgClassName="rounded-3xl"
@@ -202,7 +203,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
             ) : (
               <div
                 className="w-full rounded-3xl flex items-center justify-center"
-                style={{ aspectRatio: '1', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
+                style={{ aspectRatio: '1', maxHeight: '55vh', background: 'linear-gradient(135deg,#2a1060,#1a1040)' }}
               >
                 <Music size={72} style={{ color: 'rgb(var(--accent-dark-rgb))' }} />
               </div>
@@ -216,7 +217,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Title + artist */}
-          <div className="text-center w-full z-10 px-6" style={{ maxWidth: 380 }}>
+          <div className="text-center w-full z-10 px-6" style={{ maxWidth: 520 }}>
             <p className="font-bold text-white leading-snug truncate" style={{ fontSize: 17 }} title={np?.title}>
               {np?.title ?? '—'}
             </p>
@@ -227,7 +228,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Progress bar */}
-          <div className="w-full z-10 mt-2 mb-3 px-6" style={{ maxWidth: 380 }}>
+          <div className="w-full z-10 mt-2 mb-3 px-6" style={{ maxWidth: 520 }}>
             <div
               ref={progressRef}
               onClick={handleSeek}
@@ -309,7 +310,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
 
           {/* Volume */}
-          <div className="flex items-center gap-2.5 z-10 mt-3 w-full px-6" style={{ maxWidth: 380 }}>
+          <div className="flex items-center gap-2.5 z-10 mt-3 w-full px-6" style={{ maxWidth: 520 }}>
             <Volume2 size={14} style={{ color: '#666' }} className="flex-shrink-0" />
             <input
               type="range"
