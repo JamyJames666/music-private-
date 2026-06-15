@@ -22,7 +22,7 @@ import FileCacheProvider from './file-cache.js';
 import debug from '../utils/debug.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
-import {getYouTubeMediaSource, createYtDlpAudioStream, searchWithYtDlp} from '../utils/yt-dlp.js';
+import {getYouTubeMediaSource, searchWithYtDlp} from '../utils/yt-dlp.js';
 import {Setting} from '@prisma/client';
 import https from 'https';
 
@@ -908,7 +908,7 @@ export default class {
     ffmpegInput = await this.fileCache.getPathFor(this.getHashForCache(song.url));
 
     if (!ffmpegInput) {
-      // Resolve ytsearch1: queries to a real YouTube video ID first so errors surface properly
+      // Resolve ytsearch1: queries to a real YouTube video ID first
       if (song.url.startsWith('ytsearch1:')) {
         const query = song.url.slice('ytsearch1:'.length);
         const result = await searchWithYtDlp(query);
@@ -917,43 +917,20 @@ export default class {
         }
 
         song.url = result.id;
-        // Update duration if the song had none (e.g. bulk import sets length=0)
         if (!song.length && result.duration) {
           song.length = result.duration;
         }
-
-        // YouTube thumbnails disabled — Deezer provides higher-quality
-        // album art via prefetchThumbnails and doesn't show video screenshots.
       }
 
       const MAX_CACHE_LENGTH_SECONDS = 30 * 60; // 30 minutes
+      shouldCacheVideo = !song.isLive && song.length < MAX_CACHE_LENGTH_SECONDS;
 
-      if (!options.seek) {
-        // Pipe yt-dlp stdout directly to ffmpeg so yt-dlp handles DASH segments internally
-        const {stream: ytdlpStream, kill: ytdlpKill} = createYtDlpAudioStream(song.url);
-        shouldCacheVideo = !song.isLive && song.length < MAX_CACHE_LENGTH_SECONDS;
-        debug(shouldCacheVideo ? 'Caching video (piped)' : 'Streaming via yt-dlp pipe');
-        return this.createReadStream({
-          input: ytdlpStream,
-          ytdlpKill,
-          cacheKey: song.url,
-          cache: shouldCacheVideo,
-          songLength: song.length,
-        });
-      }
-
-      // Seek: need a URL with -ss; piped stream doesn't support seeking.
-      // ytsearch1: URLs can't be resolved to a seekable CDN URL — pipe from start instead.
-      if (song.url.startsWith('ytsearch')) {
-        const {stream: ytdlpStream, kill: ytdlpKill} = createYtDlpAudioStream(song.url);
-        return this.createReadStream({input: ytdlpStream, ytdlpKill, cacheKey: song.url, cache: false});
-      }
-
+      // Always resolve via getYouTubeMediaSource so all PLAYER_CLIENT_ATTEMPTS are tried.
+      // createYtDlpAudioStream only tried the first client and had no fallback.
       const mediaSource = await getYouTubeMediaSource(song.url);
       ffmpegInput = mediaSource.url;
       ffmpegInputOptions.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
-      const headerOptions = this.buildFfmpegHeaderOptions(mediaSource.headers);
-      ffmpegInputOptions.push(...headerOptions);
+      ffmpegInputOptions.push(...this.buildFfmpegHeaderOptions(mediaSource.headers));
     }
 
     if (options.seek) {
