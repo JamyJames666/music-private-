@@ -29,7 +29,7 @@ const CONFIG_MAP = {
   ENABLE_SPONSORBLOCK: process.env.ENABLE_SPONSORBLOCK === 'true',
   SPONSORBLOCK_TIMEOUT: parseInt(process.env.SPONSORBLOCK_TIMEOUT ?? '5', 10),
   YT_DLP_PATH: firstNonEmpty(process.env.YT_DLP_PATH, process.env.MUSE_BUNDLED_YT_DLP_PATH) ?? 'yt-dlp',
-  YT_DLP_AUTO_UPDATE: process.env.YT_DLP_AUTO_UPDATE === 'true',
+  YT_DLP_AUTO_UPDATE: process.env.YT_DLP_AUTO_UPDATE !== 'false',
   WEB_PASSWORD: process.env.WEB_PASSWORD ?? '',
   WEB_PORT: parseInt(process.env.WEB_PORT ?? '4000', 10),
   WEB_ONLY_MODE: process.env.WEB_ONLY_MODE === 'true',
