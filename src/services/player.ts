@@ -217,6 +217,19 @@ export default class {
 
     this.extraConnections.clear();
     this.extraChannels.clear();
+
+    // Schedule queue clear 5 minutes after disconnect so the queue is wiped
+    // if the bot does not rejoin. connect() cancels this timer.
+    // softDisconnect() will overwrite it with its own timer immediately after.
+    if (!this.queueClearTimer) {
+      this.queueClearTimer = setTimeout(() => {
+        this.queueClearTimer = null;
+        this.queuePosition = 0;
+        this.queue = [];
+        this.pendingSongs = [];
+        this.spotifyPlaylistContext = null;
+      }, 5 * 60 * 1000);
+    }
   }
 
   // Join an additional voice channel and broadcast the same audio to it
