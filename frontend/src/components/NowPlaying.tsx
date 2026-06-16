@@ -196,7 +196,7 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
                   aspectRatio: '1',
                   boxShadow: '0 20px 80px rgba(0,0,0,0.8), 0 0 40px rgb(var(--accent-rgb) / 0.25)',
                 }}
-                imgClassName="rounded-3xl object-cover"
+                imgClassName="rounded-3xl object-contain"
                 duration={700}
               />
             ) : (
