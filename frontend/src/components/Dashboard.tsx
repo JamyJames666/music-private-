@@ -630,7 +630,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           )}
 
           {/* LEFT PANEL — 380px on desktop */}
-          <div className="w-full lg:w-[380px] lg:flex-shrink-0 relative flex flex-col z-10 overflow-y-auto lg:h-[calc(100vh-53px-72px)]">
+          <div className="w-full lg:w-[380px] lg:flex-shrink-0 relative flex flex-col z-10 overflow-x-hidden overflow-y-auto lg:h-[calc(100vh-53px-72px)]">
             <div
               className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
               style={{
@@ -657,6 +657,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 onChannelChange={handlePrimaryChannelChange}
                 onRefresh={poll}
                 activeChannelIds={status?.activeChannelIds ?? []}
+                compact
               />
             </div>
           </div>

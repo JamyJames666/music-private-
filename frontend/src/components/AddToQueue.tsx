@@ -11,11 +11,12 @@ interface Props {
   onChannelChange: (id: string) => void
   onRefresh: () => void
   activeChannelIds: string[]
+  compact?: boolean
 }
 
 type InsertMode = 'bottom' | 'top' | 'custom'
 
-export default function AddToQueue({ token, guildId, channels, channelId, onChannelChange, onRefresh, activeChannelIds }: Props) {
+export default function AddToQueue({ token, guildId, channels, channelId, onChannelChange, onRefresh, activeChannelIds, compact = false }: Props) {
   const [query,   setQuery]   = useState('')
   const [loading, setLoading] = useState(false)
   const [status,  setStatus]  = useState<{ ok: boolean; msg: string } | null>(null)
@@ -67,16 +68,16 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
       </h2>
 
       {/* Channel + queue position */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
         {channels.length > 0 && (
-          <div className="relative">
+          <div className="relative min-w-0 flex-shrink">
             <select
               value={channelId}
               onChange={e => onChannelChange(e.target.value)}
               className="appearance-none bg-app-panel border border-app-border rounded-lg
                          text-app-text text-xs pl-2.5 pr-7 py-1.5 cursor-pointer
-                         focus:outline-none focus:border-app-accent transition-colors"
-              style={{ minWidth: 120 }}
+                         focus:outline-none focus:border-app-accent transition-colors w-full"
+              style={{ maxWidth: 160 }}
             >
               {channels.map(c => (
                 <option key={c.id} value={c.id}>🔊 {c.name}</option>
@@ -163,9 +164,11 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
           )
         }
 
+        if (compact) return null
+
         return (
           <p className="text-xs" style={{ color: '#4a4860' }}>
-            Tip: paste multiple links or names (one per line). On Spotify, Ctrl+A then Ctrl+C to copy all tracks from a playlist.
+            Tip: paste multiple links (one per line). On Spotify, Ctrl+A then Ctrl+C to copy all tracks.
           </p>
         )
       })()}
@@ -176,8 +179,8 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
         </p>
       )}
 
-      {/* Switch channel */}
-      {channels.length > 0 && (
+      {/* Switch channel — hidden in compact (left panel) mode */}
+      {!compact && channels.length > 0 && (
         <div className="pt-2 border-t space-y-1.5" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#888' }}>Switch channel</p>
           <div className="flex flex-wrap gap-1.5">
