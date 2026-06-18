@@ -18,9 +18,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Shuffle, GripVertical, X, Music, Trash2, ListMusic,
-  ChevronsUp, Search, ListPlus, LogOut, SkipForward,
+  ChevronsUp, Search, LogOut, SkipForward,
 } from 'lucide-react'
-import { shuffle, clearQueue, move, remove, flushPending, disconnect, skip, type TrackInfo } from '@/lib/api'
+import { shuffle, clearQueue, move, remove, disconnect, skip, type TrackInfo } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 // fmtDuration kept for compatibility
 const _fmtDuration = fmtTime; void _fmtDuration
@@ -187,19 +187,17 @@ interface Props {
   token: string
   guildId: string
   onRefresh: () => void
-  pendingCount?: number
   nowPlaying?: TrackInfo | null
   isPlaying?: boolean
   playerStatus?: string
 }
 
 function QueueCard({
-  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, isPlaying = false, playerStatus,
+  queue, token, guildId, onRefresh, nowPlaying = null, isPlaying = false, playerStatus,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')
   const [page, setPage]                       = useState(0)
-  const [bringingToQueue, setBringingToQueue] = useState(false)
 
   const displayQueue = optimisticQueue ?? queue
   // Ref mirror so row callbacks can stay referentially stable (keeps QueueRow memo effective)
@@ -265,13 +263,6 @@ function QueueCard({
     finally { setOptimisticQueue(null); onRefresh() }
   }, [token, guildId, onRefresh])
 
-  const handleBringToQueue = async () => {
-    setBringingToQueue(true)
-    try { await flushPending(token, guildId, 9999); onRefresh() }
-    catch { /* non-fatal */ }
-    finally { setBringingToQueue(false) }
-  }
-
   return (
     <div className="flex flex-col overflow-hidden h-full">
 
@@ -313,35 +304,12 @@ function QueueCard({
           <span className="mr-auto" />
         )}
 
-        {/* Load Lazy Songs — always visible */}
-        <button
-          onClick={handleBringToQueue}
-          disabled={bringingToQueue || pendingCount === 0}
-          className={cn(
-            'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95',
-            pendingCount > 0 && !bringingToQueue && 'animate-lazy-ready',
-          )}
-          style={pendingCount > 0
-            ? { background: 'rgb(var(--accent-rgb) / 0.20)', color: 'rgb(var(--accent-rgb))', border: '1px solid rgb(var(--accent-rgb) / 0.40)' }
-            : { background: 'transparent', color: '#444', border: '1px solid #333', cursor: 'default' }
-          }
-          title={pendingCount > 0 ? `Load ${pendingCount} more songs into queue` : 'No lazy songs waiting'}
-        >
-          <ListPlus size={12} />
-          {bringingToQueue ? 'Loading…' : pendingCount > 0 ? `Load Lazy Songs (${pendingCount})` : 'Load Lazy Songs'}
-        </button>
-
         <button
           className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
           onClick={handleShuffle}
           disabled={displayQueue.length < 2}
         >
           <Shuffle size={12} /> Shuffle
-          {pendingCount > 0 && (
-            <span className="text-[10px] opacity-60" title={`Shuffles ${displayQueue.length} active + ${pendingCount} pending = ${displayQueue.length + pendingCount} total`}>
-              ({displayQueue.length + pendingCount})
-            </span>
-          )}
         </button>
         <button
           className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5 hover:text-app-danger"

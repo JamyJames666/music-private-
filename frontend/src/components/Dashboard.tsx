@@ -46,7 +46,7 @@ function GuildSwitcher({ guilds, primaryGuildId, onSwitch }: { guilds: Guild[]; 
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 rounded-lg border border-app-border overflow-hidden z-50"
-          style={{ background: '#0e0c1c', minWidth: 160 }}>
+          style={{ background: '#151230', minWidth: 160 }}>
           {guilds.map(g => (
             <button
               key={g.id}
@@ -664,7 +664,6 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               token={token}
               guildId={primaryGuildId}
               onRefresh={poll}
-              pendingCount={status?.pendingCount ?? 0}
               nowPlaying={status?.nowPlaying ?? null}
               isPlaying={status?.status === 'PLAYING'}
               playerStatus={status?.status}

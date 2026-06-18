@@ -5,14 +5,14 @@ export default {
     extend: {
       colors: {
         app: {
-          bg:            '#07060f',
-          surface:       '#0e0c1c',
-          panel:         '#171528',
-          border:        '#2e2b45',
+          bg:            '#0d0b1c',
+          surface:       '#151230',
+          panel:         '#1e1b38',
+          border:        '#3d3960',
           accent:        'rgb(var(--accent-rgb) / <alpha-value>)',
           'accent-dark': 'rgb(var(--accent-dark-rgb) / <alpha-value>)',
           text:          '#f0eeff',
-          muted:         '#9a98b8',
+          muted:         '#b0aed0',
           danger:        '#f43f5e',
           spotify:       '#1db954',
           youtube:       '#ff0000',
