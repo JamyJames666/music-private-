@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react'
+import { Shuffle as ShuffleIcon } from 'lucide-react'
 import {
-  setCrossfade, setEffect, setSpeed, toggleLoopSong, toggleLoopQueue,
-  shuffle, type PlayerStatus, type AudioEffect,
+  setCrossfade, setSpeed, toggleLoopSong, toggleLoopQueue,
+  shuffle, type PlayerStatus,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { toast } from '@/lib/use-toast'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Toggle — a big pill-style on/off switch with label + description
@@ -127,48 +129,6 @@ function SpeedRow({ current, onChange }: { current: number; onChange: (s: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EffectRow
-// ─────────────────────────────────────────────────────────────────────────────
-
-const EFFECT_OPTIONS: { id: AudioEffect; label: string; description: string }[] = [
-  { id: 'none',      label: 'Off',       description: 'No audio processing'          },
-  { id: 'bass',      label: 'Bass Boost',description: 'Deep sub-bass emphasis'       },
-  { id: 'treble',    label: 'Treble',    description: 'Crisp high-frequency boost'   },
-  { id: 'reverb',    label: 'Reverb',    description: 'Room echo effect'             },
-  { id: '8d',        label: '8D Audio',  description: 'Rotating stereo panning'      },
-  { id: 'nightcore', label: 'Nightcore', description: 'Pitch shifted up 25%'         },
-  { id: 'vaporwave', label: 'Vaporwave', description: 'Pitch shifted down 20%'       },
-]
-
-function EffectGrid({ current, onChange }: { current: AudioEffect; onChange: (e: AudioEffect) => void }) {
-  return (
-    <div className="px-4 py-3.5 rounded-xl border border-app-border bg-app-surface space-y-3">
-      <div>
-        <p className="text-sm font-semibold text-app-text">Active Effect</p>
-        <p className="text-xs text-app-muted mt-0.5">Applied to all playback in real-time</p>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {EFFECT_OPTIONS.map(fx => (
-          <button
-            key={fx.id}
-            onClick={() => onChange(fx.id)}
-            className={cn(
-              'flex flex-col text-left px-3 py-2.5 rounded-lg border transition-all',
-              current === fx.id
-                ? 'bg-app-accent/15 border-app-accent text-app-accent'
-                : 'bg-app-panel border-app-border text-app-muted hover:text-app-text hover:border-app-muted/30',
-            )}
-          >
-            <span className="text-xs font-bold">{fx.label}</span>
-            <span className="text-[10px] mt-0.5 opacity-70">{fx.description}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main AutoDj
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -193,7 +153,6 @@ export default function AutoDj({ status, token, guildId, onRefresh }: Props) {
 
   const xfade    = status?.crossfade ?? 0
   const speed    = status?.speed     ?? 1
-  const effect   = status?.effect    ?? 'none'
   const loopSong = status?.loopSong  ?? false
   const loopQ    = status?.loopQueue ?? false
   const isActive = status?.status === 'PLAYING' || status?.status === 'PAUSED'
@@ -239,24 +198,20 @@ export default function AutoDj({ status, token, guildId, onRefresh }: Props) {
             onChange={() => call(() => toggleLoopQueue(token, guildId))}
             accent="#22c55e"
           />
-          <Toggle
-            label="Shuffle Now"
-            description="Randomise the current queue order instantly"
-            enabled={false}
-            onChange={() => call(() => shuffle(token, guildId))}
-            accent="#f97316"
-          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => call(async () => { await shuffle(token, guildId); toast('Queue shuffled') })}
+            className="flex items-center justify-between w-full px-4 py-3.5 rounded-xl border border-app-border bg-app-surface hover:border-app-muted/30 transition-all text-left disabled:opacity-50"
+          >
+            <div className="min-w-0 mr-4">
+              <p className="text-sm font-semibold text-app-text">Shuffle Queue</p>
+              <p className="text-xs text-app-muted mt-0.5">Randomise the current queue order instantly</p>
+            </div>
+            <ShuffleIcon size={18} className="text-app-muted flex-shrink-0" />
+          </button>
         </Section>
 
-        {/* Effects */}
-        <Section title="Sound Effects">
-          <EffectGrid current={effect} onChange={e => call(() => setEffect(token, guildId, e))} />
-        </Section>
-
-        {/* Info footer */}
-        <p className="text-xs text-app-border text-center pb-4">
-          EQ and crossfader fine-tuning are available in the PRO DJ deck
-        </p>
 
       </div>
     </div>

@@ -21,7 +21,8 @@ import {
   ChevronsUp, Search, LogOut, SkipForward,
 } from 'lucide-react'
 import { shuffle, clearQueue, move, remove, disconnect, skip, type TrackInfo } from '@/lib/api'
-import { fmtTime, cn } from '@/lib/utils'
+import { fmtTime, fmtDuration, cn } from '@/lib/utils'
+import { toast } from '@/lib/use-toast'
 // fmtDuration kept for compatibility
 const _fmtDuration = fmtTime; void _fmtDuration
 import SourceBadge from './SourceBadge'
@@ -244,7 +245,7 @@ function QueueCard({
     }
   }, [displayQueue, token, guildId, onRefresh])
 
-  const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh() }
+  const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh(); toast('Queue shuffled') }
   const handleClearQueue   = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
   const handleDisconnect   = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
 
@@ -288,17 +289,12 @@ function QueueCard({
           <div className="flex items-center gap-2 mr-auto flex-wrap">
             <span className="text-xs tabular-nums" style={{ color: '#666' }}>
               {displayQueue.length} songs
+              {(() => {
+                const total = displayQueue.reduce((s, t) => s + (t.length ?? 0), 0)
+                const d = fmtDuration(total)
+                return d ? <span className="ml-1">· {d}</span> : null
+              })()}
             </span>
-            {nowPlaying && (() => {
-              const total = 1 + displayQueue.length
-              const pct   = Math.round((1 / total) * 100)
-              return (
-                <span className="text-xs tabular-nums font-medium" style={{ color: '#666' }}>
-                  · 1/{total}
-                  <span className="ml-1.5 font-bold" style={{ color: 'rgb(var(--accent-rgb))' }}>{pct}%</span>
-                </span>
-              )
-            })()}
           </div>
         ) : (
           <span className="mr-auto" />

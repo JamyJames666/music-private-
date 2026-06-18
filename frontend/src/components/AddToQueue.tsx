@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Plus, ChevronDown, ArrowDown, ArrowUp, Hash } from 'lucide-react'
 import { play, moveChannel, type Channel } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { toast } from '@/lib/use-toast'
 
 interface Props {
   token: string
@@ -46,9 +47,8 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
 
     try {
       const res = await play(token, guildId, q, channelId || undefined, false, insertAt)
-      setStatus({ ok: true, msg: `Added ${res.added} song${res.added === 1 ? '' : 's'} — ${res.first}` })
+      toast(`Added ${res.added} song${res.added === 1 ? '' : 's'}`)
       setQuery('')
-      setTimeout(() => setStatus(null), 4000)
       onRefresh()
     } catch (err) {
       setStatus({ ok: false, msg: err instanceof Error ? err.message : 'Failed to add.' })

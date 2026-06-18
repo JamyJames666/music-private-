@@ -13,3 +13,12 @@ export function fmtTime(sec: number): string {
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
+
+/** Format a total-seconds duration as "1h 23m" or "45 min" */
+export function fmtDuration(sec: number): string {
+  if (!sec || sec <= 0) return ''
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m} min`
+}

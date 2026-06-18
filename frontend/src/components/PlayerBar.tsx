@@ -20,6 +20,10 @@ export default function PlayerBar({ status, token, guildId, onRefresh, onPositio
   const np = status?.nowPlaying ?? null
   const isPlaying = status?.status === 'PLAYING'
   const len = np?.length ?? 0
+  const queue = status?.queue ?? []
+  const trackIndex = np ? queue.findIndex(t => t.url === np.url) : -1
+  const trackNum = trackIndex >= 0 ? trackIndex + 1 : null
+  const trackTotal = queue.length
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!len) return
@@ -89,6 +93,11 @@ export default function PlayerBar({ status, token, guildId, onRefresh, onPositio
               {np?.artist ?? '—'}
             </span>
             {np?.source && <SourceBadge source={np.source} />}
+            {trackNum !== null && trackTotal > 0 && (
+              <span className="text-[11px] tabular-nums flex-shrink-0" style={{ color: '#555' }}>
+                {trackNum}/{trackTotal}
+              </span>
+            )}
           </div>
         </div>
 

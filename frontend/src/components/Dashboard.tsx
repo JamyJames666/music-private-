@@ -18,6 +18,7 @@ import Settings from './Settings'
 import AutoDj from './AutoDj'
 import PlayerBar from './PlayerBar'
 import SearchPanel from './SearchPanel'
+import Toaster from './Toaster'
 
 interface Props {
   token: string
@@ -694,7 +695,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   )}
                 >
                   {tab === 'queue'
-                    ? `Queue${(status?.queue?.length ?? 0) > 0 ? ` · ${status!.queue.length}` : ''}`
+                    ? `Queue${(status?.queue?.length ?? 0) > 0 ? ` · ${status!.queue.length}` : ''}${(status?.pendingCount ?? 0) > 0 ? ` +${status!.pendingCount}` : ''}`
                     : tab === 'search' ? 'Search' : 'Effects'}
                 </button>
               ))}
@@ -809,6 +810,8 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           </div>
         </div>
       )}
+
+      <Toaster />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Search, Plus, ArrowUp, Clock, Music } from 'lucide-react'
 import { searchSongs, play, type SearchResult } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
+import { toast } from '@/lib/use-toast'
 
 interface Props {
   token: string
@@ -58,6 +59,7 @@ export default function SearchPanel({ token, guildId, channelId, onRefresh }: Pr
       await play(token, guildId, result.url, channelId || undefined, false, insertAt)
       setAdded(key)
       onRefresh()
+      toast(insertAt === 'top' ? 'Playing next' : 'Added to queue')
       setTimeout(() => setAdded(null), 2000)
     } catch { /* best-effort */ } finally {
       setAdding(null)
@@ -196,12 +198,12 @@ export default function SearchPanel({ token, guildId, channelId, onRefresh }: Pr
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Play Next — on hover */}
+                    {/* Play Next */}
                     <button
                       onClick={() => void handleAdd(result, 'top')}
                       disabled={isAddingThis}
                       title="Play next"
-                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-xs px-2 py-1 rounded-lg
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg
                                  border border-white/10 text-app-muted hover:text-white hover:border-white/25
                                  transition-all disabled:opacity-30"
                     >
