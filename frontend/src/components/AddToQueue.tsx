@@ -130,13 +130,19 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
       </div>
 
       {/* Search form */}
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          className="input flex-1 text-sm"
+      <form onSubmit={handleSubmit} className="flex gap-2 items-start">
+        <textarea
+          rows={Math.min(Math.max(1, query.split('\n').filter(Boolean).length), 6)}
+          className="input flex-1 text-sm resize-none leading-relaxed"
           placeholder="Song name or link (YouTube or Spotify)…"
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey && query.split('\n').filter(Boolean).length <= 1) {
+              e.preventDefault()
+              void handleSubmit(e as unknown as FormEvent)
+            }
+          }}
         />
         <button
           type="submit"
@@ -147,6 +153,23 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
           {loading ? 'Adding…' : 'Add'}
         </button>
       </form>
+
+      {(() => {
+        const trackCount = query.split('\n').filter(l => l.trim()).length
+        if (trackCount > 1) {
+          return (
+            <p className="text-xs font-medium" style={{ color: 'rgb(var(--accent-rgb))' }}>
+              {trackCount} tracks detected — click Add to queue them all
+            </p>
+          )
+        }
+
+        return (
+          <p className="text-xs" style={{ color: '#4a4860' }}>
+            Tip: paste multiple links or names (one per line). On Spotify, Ctrl+A then Ctrl+C to copy all tracks from a playlist.
+          </p>
+        )
+      })()}
 
       {status && (
         <p className={cn('text-xs animate-fade-up', status.ok ? 'text-app-muted' : 'text-app-danger')}>

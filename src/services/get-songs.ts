@@ -18,6 +18,26 @@ export default class {
   }
 
   async getSongs(query: string, playlistLimit: number, shouldSplitChapters: boolean, lyricVideo = true): Promise<[SongMetadata[], string]> {
+    // Bulk mode: newline-separated list of URLs or search terms
+    const lines = query.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      const results = await Promise.allSettled(
+        lines.map(async line => this.getSongs(line, playlistLimit, shouldSplitChapters, lyricVideo)),
+      );
+      const songs: SongMetadata[] = [];
+      let notFound = 0;
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          songs.push(...r.value[0]);
+        } else {
+          notFound++;
+        }
+      }
+
+      const extraMsg = notFound > 0 ? `${notFound} track${notFound === 1 ? '' : 's'} not found` : '';
+      return [songs, extraMsg];
+    }
+
     const newSongs: SongMetadata[] = [];
     let extraMsg = '';
 
