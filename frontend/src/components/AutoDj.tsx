@@ -199,7 +199,7 @@ export default function AutoDj({ status, token, guildId, onRefresh }: Props) {
   const isActive = status?.status === 'PLAYING' || status?.status === 'PAUSED'
 
   return (
-    <div className="min-h-[calc(100vh-61px)] bg-app-bg">
+    <div>
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
 
         {/* Header */}

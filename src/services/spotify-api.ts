@@ -11,6 +11,7 @@ export interface SpotifyTrack {
   artist: string;
   durationSeconds: number;
   thumbnailUrl: string | null;
+  spotifyUrl?: string;
 }
 
 @injectable()
@@ -121,6 +122,37 @@ export default class {
     return this.limitTracks(body.tracks, playlistLimit).map(t =>
       this.toSpotifyTrack(t, (t).album?.images?.[0]?.url ?? null),
     );
+  }
+
+  async searchTracks(query: string, limit: number): Promise<SpotifyTrack[]> {
+    const token = await this.getSearchToken();
+    if (!token) {
+      return [];
+    }
+
+    try {
+      interface SearchTrackItem {
+        name: string;
+        artists: Array<{name: string}>;
+        duration_ms: number;
+        album: {images: Array<{url: string}>};
+        external_urls: {spotify: string};
+      }
+      const raw = await got(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`,
+        {headers: {Authorization: `Bearer ${token}`}, timeout: {request: 10_000}},
+      ).text();
+      const body = JSON.parse(raw) as {tracks?: {items: SearchTrackItem[]}};
+      return (body.tracks?.items ?? []).map(t => ({
+        name: t.name,
+        artist: t.artists[0]?.name ?? '',
+        durationSeconds: Math.round(t.duration_ms / 1000),
+        thumbnailUrl: t.album.images[0]?.url ?? null,
+        spotifyUrl: t.external_urls.spotify,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   private async freshEmbedToken(playlistId: string, force = false): Promise<string | null> {
@@ -479,6 +511,29 @@ export default class {
     }
 
     return tracks;
+  }
+
+  private async getSearchToken(): Promise<string | null> {
+    const clientId = this.spotify.getClientId();
+    const clientSecret = this.spotify.getClientSecret();
+    if (clientId && clientSecret) {
+      try {
+        const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const raw = await got('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {Authorization: `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded'},
+          body: 'grant_type=client_credentials',
+          timeout: {request: 10_000},
+        }).text();
+        const token = (JSON.parse(raw) as {access_token?: string}).access_token;
+        if (token) {
+          return token;
+        }
+      } catch { /* fall through to anon */ }
+    }
+
+    const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    return this.getAnonymousToken(BROWSER_UA);
   }
 
   private toSpotifyTrack(track: SpotifyApi.TrackObjectSimplified, thumbnailUrl: string | null = null): SpotifyTrack {

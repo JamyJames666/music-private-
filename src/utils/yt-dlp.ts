@@ -362,6 +362,34 @@ const extractFirstSearchResult = (raw: YtDlpRawSearchResult): YtDlpSearchResult 
   };
 };
 
+export const searchYouTubeMulti = async (query: string, limit: number): Promise<YtDlpSearchResult[]> => {
+  try {
+    const {stdout} = await execa(getExecutable(), [
+      `ytsearch${limit}:${query}`,
+      '--flat-playlist',
+      '--dump-json',
+      '--no-playlist',
+      '--no-warnings',
+      '--no-cache-dir',
+    ], {timeout: YT_DLP_EXTRACT_TIMEOUT_MS});
+
+    return stdout
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((line): YtDlpSearchResult[] => {
+        try {
+          const result = extractFirstSearchResult(JSON.parse(line) as YtDlpRawSearchResult);
+          return result ? [result] : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+};
+
 export const searchWithYtDlp = async (query: string): Promise<YtDlpSearchResult | null> => {
   try {
     const {stdout} = await execa(getExecutable(), [

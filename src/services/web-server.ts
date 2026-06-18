@@ -275,6 +275,48 @@ export default class WebServer {
       res.json(Array.from(channels.values()));
     });
 
+    // Search for songs (YouTube or Spotify) without adding to queue
+    this.app.get('/api/guilds/:guildId/search', auth, async (req: express.Request, res: express.Response) => {
+      const {q, source = 'youtube', limit: lStr = '10'} = req.query as Record<string, string>;
+      if (!q?.trim()) {
+        res.status(400).json({error: 'q is required'});
+        return;
+      }
+
+      const limit = Math.min(20, Math.max(1, parseInt(lStr, 10) || 10));
+      try {
+        if (source === 'spotify') {
+          if (!this.spotifyApi) {
+            res.status(400).json({error: 'Spotify not configured'});
+            return;
+          }
+
+          const tracks = await this.spotifyApi.searchTracks(q, limit);
+          res.json({results: tracks.map(t => ({
+            title: t.name,
+            artist: t.artist,
+            duration: t.durationSeconds,
+            thumbnailUrl: t.thumbnailUrl,
+            url: t.spotifyUrl ?? '',
+            source: 'spotify',
+          }))});
+        } else {
+          const {searchYouTubeMulti} = await import('../utils/yt-dlp.js');
+          const raw = await searchYouTubeMulti(q, limit);
+          res.json({results: raw.map(r => ({
+            title: r.title,
+            artist: r.uploader,
+            duration: r.duration,
+            thumbnailUrl: r.thumbnail || `https://i.ytimg.com/vi/${r.id}/mqdefault.jpg`,
+            url: `https://www.youtube.com/watch?v=${r.id}`,
+            source: 'youtube',
+          }))});
+        }
+      } catch (e: unknown) {
+        res.status(500).json({error: (e as Error).message});
+      }
+    });
+
     // Get / set the announcement channel for this guild
     this.app.get('/api/guilds/:guildId/settings/announcement', auth, async (req: express.Request, res: express.Response) => {
       const settings = await getGuildSettings(req.params.guildId);

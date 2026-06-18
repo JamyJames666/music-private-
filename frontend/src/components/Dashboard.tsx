@@ -5,6 +5,7 @@ import {
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { applyAccent, ACCENT_PRESETS } from './Settings'
 import { extractAccentFromImage } from '@/lib/album-color'
 import CrossfadeImage from './CrossfadeImage'
@@ -14,6 +15,9 @@ import AddToQueue from './AddToQueue'
 import BotSettings from './BotSettings'
 import BulkImport from './BulkImport'
 import Settings from './Settings'
+import AutoDj from './AutoDj'
+import PlayerBar from './PlayerBar'
+import SearchPanel from './SearchPanel'
 
 interface Props {
   token: string
@@ -232,6 +236,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const smoothPositionRef = useRef(0)
   const handlePositionChange = useCallback((pos: number) => { smoothPositionRef.current = pos }, [])
   const [view, setView] = useState<'player' | 'admin'>('player')
+
+  type RightTab = 'search' | 'queue' | 'effects'
+  const [rightTab, setRightTab] = useState<RightTab>(
+    () => (localStorage.getItem('muse_right_tab') as RightTab) ?? 'queue',
+  )
 
   // Admin unlock — bulkToken stored in localStorage (never the raw password)
   const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
@@ -602,73 +611,134 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
           </div>
         )
       ) : (
-        <div className="relative flex flex-col lg:flex-row lg:overflow-hidden lg:h-[calc(100vh-53px)]">
-
+        <div
+          className="relative flex flex-col lg:flex-row lg:overflow-hidden pb-[72px]"
+          style={{ minHeight: 'calc(100vh - 53px)' }}
+        >
+          {/* Ambient background art */}
           {status?.nowPlaying?.thumbnailUrl && (
             <CrossfadeImage
               src={status.nowPlaying.thumbnailUrl}
               className="absolute inset-0 pointer-events-none animate-fade-in"
               imgStyle={{
                 filter:    'blur(80px) saturate(2.2) brightness(1.3)',
-                opacity:   0.32,
+                opacity:   0.25,
                 transform: 'scale(1.1)',
               }}
               duration={900}
             />
           )}
 
-          {/* Left: Now Playing */}
-          <div className="w-full lg:w-1/2 relative flex flex-col" style={{ zIndex: 1 }}>
-            <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+          {/* LEFT PANEL — 380px on desktop */}
+          <div className="w-full lg:w-[380px] lg:flex-shrink-0 relative flex flex-col z-10 overflow-y-auto lg:h-[calc(100vh-53px-72px)]">
+            <div
+              className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
               style={{
                 top: 40, width: 420, height: 420,
                 background: 'radial-gradient(circle, rgb(var(--accent-rgb) / 0.18) 0%, rgb(var(--accent-dark-rgb) / 0.10) 45%, transparent 70%)',
                 filter: 'blur(60px)',
                 borderRadius: '50%',
                 zIndex: 0,
-              }} />
-            <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-              <div className="px-6 pt-4 pb-2">
-                <NowPlaying status={status} token={token} guildId={primaryGuildId} onRefresh={poll} onPositionChange={handlePositionChange} />
-              </div>
-              <div className="flex flex-col gap-3 px-8 pb-6">
-                <AddToQueue
-                  token={token}
-                  guildId={primaryGuildId}
-                  channels={primaryChannels}
-                  channelId={primaryChannelId}
-                  onChannelChange={handlePrimaryChannelChange}
-                  onRefresh={poll}
-                  activeChannelIds={status?.activeChannelIds ?? []}
-                />
-
-              </div>
+              }}
+            />
+            <div className="relative z-10 flex flex-col px-6 pt-4 pb-6 gap-4">
+              <NowPlaying
+                status={status}
+                token={token}
+                guildId={primaryGuildId}
+                onRefresh={poll}
+                onPositionChange={handlePositionChange}
+              />
+              <AddToQueue
+                token={token}
+                guildId={primaryGuildId}
+                channels={primaryChannels}
+                channelId={primaryChannelId}
+                onChannelChange={handlePrimaryChannelChange}
+                onRefresh={poll}
+                activeChannelIds={status?.activeChannelIds ?? []}
+              />
             </div>
           </div>
 
-          {/* Right: Queue + optional secondary guild card */}
-          <div className="w-full lg:w-1/2 flex flex-col overflow-hidden border-t lg:border-t-0 lg:border-l border-white/[0.07]" style={{ zIndex: 1 }}>
+          {/* RIGHT PANEL — tabbed: Search / Queue / Effects */}
+          <div className="flex-1 flex flex-col min-w-0 border-t lg:border-t-0 lg:border-l border-white/[0.07] z-10 lg:h-[calc(100vh-53px-72px)]">
+
+            {/* Optional secondary guild card */}
             {secondaryGuildId && secondaryGuild && (
-              <SecondaryGuildCard
-                token={token}
-                guildId={secondaryGuildId}
-                guildName={secondaryGuild.name}
-                channels={secondaryChannels}
-                channelId={secondaryChannelId}
-                onChannelChange={handleSecondaryChannelChange}
-                onRemove={() => removeGuild(secondaryGuildId)}
-              />
+              <div className="px-5 pt-4 pb-2 flex-shrink-0">
+                <SecondaryGuildCard
+                  token={token}
+                  guildId={secondaryGuildId}
+                  guildName={secondaryGuild.name}
+                  channels={secondaryChannels}
+                  channelId={secondaryChannelId}
+                  onChannelChange={handleSecondaryChannelChange}
+                  onRemove={() => removeGuild(secondaryGuildId)}
+                />
+              </div>
             )}
-            <QueueCard
-              queue={status?.queue ?? EMPTY_QUEUE}
-              token={token}
-              guildId={primaryGuildId}
-              onRefresh={poll}
-              nowPlaying={status?.nowPlaying ?? null}
-              isPlaying={status?.status === 'PLAYING'}
-              playerStatus={status?.status}
-            />
+
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 px-5 py-3 border-b border-white/[0.07] flex-shrink-0">
+              {(['search', 'queue', 'effects'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => { setRightTab(tab); localStorage.setItem('muse_right_tab', tab) }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                    rightTab === tab
+                      ? 'text-white bg-white/[0.08] border border-white/[0.12]'
+                      : 'text-app-muted hover:text-white hover:bg-white/[0.04]',
+                  )}
+                >
+                  {tab === 'queue'
+                    ? `Queue${(status?.queue?.length ?? 0) > 0 ? ` · ${status!.queue.length}` : ''}`
+                    : tab === 'search' ? 'Search' : 'Effects'}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content — scrollable */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {rightTab === 'search' && (
+                <SearchPanel
+                  token={token}
+                  guildId={primaryGuildId}
+                  channelId={primaryChannelId}
+                  onRefresh={poll}
+                />
+              )}
+              {rightTab === 'queue' && (
+                <QueueCard
+                  queue={status?.queue ?? EMPTY_QUEUE}
+                  token={token}
+                  guildId={primaryGuildId}
+                  onRefresh={poll}
+                  nowPlaying={status?.nowPlaying ?? null}
+                  isPlaying={status?.status === 'PLAYING'}
+                  playerStatus={status?.status}
+                />
+              )}
+              {rightTab === 'effects' && (
+                <AutoDj
+                  status={status}
+                  token={token}
+                  guildId={primaryGuildId}
+                  onRefresh={poll}
+                />
+              )}
+            </div>
           </div>
+
+          {/* Fixed bottom player bar */}
+          <PlayerBar
+            status={status}
+            token={token}
+            guildId={primaryGuildId}
+            onRefresh={poll}
+            onPositionChange={handlePositionChange}
+          />
 
         </div>
       )}

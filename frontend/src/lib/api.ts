@@ -167,3 +167,30 @@ export const getAdminOnly = (t: string, guildId: string) =>
 export const setAdminOnly = (t: string, guildId: string, enabled: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/admin-only`, t, {enabled})
 
+export interface SearchResult {
+  title:        string
+  artist:       string
+  duration:     number
+  thumbnailUrl: string | null
+  url:          string
+  source:       'youtube' | 'spotify'
+}
+
+export async function searchSongs(
+  token: string,
+  guildId: string,
+  query: string,
+  source: 'youtube' | 'spotify' = 'youtube',
+  limit = 10,
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({q: query, source, limit: String(limit)})
+  const res = await fetch(`/api/guilds/${guildId}/search?${params}`, {
+    headers: {Authorization: `Bearer ${token}`},
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({error: res.statusText})) as {error?: string}
+    throw new ApiError(res.status, data.error ?? res.statusText)
+  }
+  return ((await res.json()) as {results: SearchResult[]}).results
+}
+
