@@ -115,6 +115,8 @@ export default class {
   private pauseDisconnectTimer: NodeJS.Timeout | null = null;
   private emptyChannelTimer: NodeJS.Timeout | null = null;
   private queueClearTimer: NodeJS.Timeout | null = null;
+  private pauseDisconnectsAt: number | null = null;
+  private queueClearsAt: number | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
@@ -129,10 +131,11 @@ export default class {
       this.disconnect();
     }
 
-    // Cancel any pending soft-disconnect queue-clear
+    // Cancel any pending queue-clear so reconnecting preserves the queue
     if (this.queueClearTimer) {
       clearTimeout(this.queueClearTimer);
       this.queueClearTimer = null;
+      this.queueClearsAt = null;
     }
 
     // Always get freshest default volume setting value
@@ -183,6 +186,7 @@ export default class {
     if (this.pauseDisconnectTimer) {
       clearTimeout(this.pauseDisconnectTimer);
       this.pauseDisconnectTimer = null;
+      this.pauseDisconnectsAt = null;
     }
 
     if (this.voiceConnection) {
@@ -194,6 +198,7 @@ export default class {
       if (this.pauseDisconnectTimer) {
         clearTimeout(this.pauseDisconnectTimer);
         this.pauseDisconnectTimer = null;
+        this.pauseDisconnectsAt = null;
       }
 
       this.loopCurrentSong = false;
@@ -222,13 +227,16 @@ export default class {
     // if the bot does not rejoin. connect() cancels this timer.
     // softDisconnect() will overwrite it with its own timer immediately after.
     if (!this.queueClearTimer) {
+      const clearMs = 5 * 60 * 1000;
+      this.queueClearsAt = Date.now() + clearMs;
       this.queueClearTimer = setTimeout(() => {
         this.queueClearTimer = null;
+        this.queueClearsAt = null;
         this.queuePosition = 0;
         this.queue = [];
         this.pendingSongs = [];
         this.spotifyPlaylistContext = null;
-      }, 5 * 60 * 1000);
+      }, clearMs);
     }
   }
 
@@ -352,6 +360,7 @@ export default class {
       if (this.pauseDisconnectTimer) {
         clearTimeout(this.pauseDisconnectTimer);
         this.pauseDisconnectTimer = null;
+        this.pauseDisconnectsAt = null;
       }
 
       if (this.audioPlayer) {
@@ -442,18 +451,20 @@ export default class {
 
     this.stopTrackingPosition();
 
-    // Disconnect after 10 minutes of being paused
     if (this.pauseDisconnectTimer) {
       clearTimeout(this.pauseDisconnectTimer);
     }
 
+    const pauseMs = 5 * 60 * 1000;
+    this.pauseDisconnectsAt = Date.now() + pauseMs;
     this.pauseDisconnectTimer = setTimeout(() => {
       if (this.status === STATUS.PAUSED) {
         this.disconnect();
       }
 
       this.pauseDisconnectTimer = null;
-    }, 10 * 60 * 1000);
+      this.pauseDisconnectsAt = null;
+    }, pauseMs);
   }
 
   async forward(skip: number): Promise<void> {
@@ -687,11 +698,14 @@ export default class {
       clearTimeout(this.queueClearTimer);
     }
 
+    const clearMs = gracePeriodSeconds * 1000;
+    this.queueClearsAt = Date.now() + clearMs;
     this.queueClearTimer = setTimeout(() => {
       this.queueClearTimer = null;
+      this.queueClearsAt = null;
       this.queuePosition = 0;
       this.queue = [];
-    }, gracePeriodSeconds * 1000);
+    }, clearMs);
   }
 
   /**
@@ -764,6 +778,14 @@ export default class {
   getVolume(): number {
     // Only use default volume if player volume is not already set (in the event of a reconnect we shouldn't reset)
     return this.volume ?? this.defaultVolume;
+  }
+
+  getPauseDisconnectsAt(): number | null {
+    return this.pauseDisconnectsAt;
+  }
+
+  getQueueClearsAt(): number | null {
+    return this.queueClearsAt;
   }
 
   setSpeed(speed: number): void {

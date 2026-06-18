@@ -567,6 +567,8 @@ export default class WebServer {
           return player.spotifyPlaylistContext !== null;
         })(),
         accentColor: settings?.accentColor ?? null,
+        pauseDisconnectsAt: player.getPauseDisconnectsAt(),
+        queueClearsAt: player.getQueueClearsAt(),
       });
     });
 

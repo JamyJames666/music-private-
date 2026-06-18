@@ -108,6 +108,22 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const isPlaying = optimisticPlaying ?? serverPlaying
   const active    = status?.status === 'PLAYING' || status?.status === 'PAUSED'
   const np        = status?.nowPlaying ?? null
+
+  // Live countdown for pause-disconnect and queue-clear timers
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const hasCountdown = status?.pauseDisconnectsAt || status?.queueClearsAt
+    if (!hasCountdown) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [status?.pauseDisconnectsAt, status?.queueClearsAt])
+
+  const fmtCountdown = (endsAt: number) => {
+    const secs = Math.max(0, Math.round((endsAt - Date.now()) / 1000))
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
   const pb        = playback.current
   const pct       = pb.len > 0 ? Math.min(100, (pb.pos / pb.len) * 100) : 0
 
@@ -182,6 +198,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
           <p className="text-white font-bold text-xl">Nothing playing</p>
           <p className="text-sm" style={{ color: '#555' }}>Add a song to get started</p>
+          {status?.queueClearsAt && (
+            <div
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+            >
+              <span style={{ fontSize: 10 }}>🗑</span>
+              Queue clears in {fmtCountdown(status.queueClearsAt)}
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -225,6 +250,30 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               {np?.source && <SourceBadge source={np.source} />}
             </div>
           </div>
+
+          {/* Disconnect / queue-clear countdown pills */}
+          {(status?.pauseDisconnectsAt || status?.queueClearsAt) && (
+            <div className="flex flex-col items-center gap-1 z-10 mt-1 mb-1">
+              {status?.pauseDisconnectsAt && (
+                <div
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}
+                >
+                  <span style={{ fontSize: 10 }}>⏸</span>
+                  Disconnects in {fmtCountdown(status.pauseDisconnectsAt)}
+                </div>
+              )}
+              {status?.queueClearsAt && (
+                <div
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+                >
+                  <span style={{ fontSize: 10 }}>🗑</span>
+                  Queue clears in {fmtCountdown(status.queueClearsAt)}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="w-full z-10 mt-2 mb-3 px-6" style={{ maxWidth: 440 }}>

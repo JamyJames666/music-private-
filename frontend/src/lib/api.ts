@@ -31,7 +31,9 @@ export interface PlayerStatus {
   spotifyHasMore:    boolean
   hasBulkImport:     boolean
   pendingPreview: Array<{ title: string; artist: string }>
-  accentColor:    string | null
+  accentColor:       string | null
+  pauseDisconnectsAt: number | null
+  queueClearsAt:      number | null
 }
 
 // ── Client ───────────────────────────────────────────────────────────────────
