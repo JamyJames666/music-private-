@@ -714,13 +714,15 @@ export default class {
    * timeout (secondsToWaitAfterQueueEmpties).
    */
   async clearQueue(): Promise<void> {
-    this.audioPlayer?.stop(true);
+    // Set all state BEFORE stop() so the synchronous Idle event sees IDLE status
+    // and onAudioPlayerIdle skips all queue-advancement logic.
     this.status = STATUS.IDLE;
     this.nowPlaying = null;
     this.positionInSeconds = 0;
     this.queuePosition = 0;
     this.queue = [];
     this.stopTrackingPosition();
+    this.audioPlayer?.stop(true);
 
     // Reset any pending idle disconnect timer and start a fresh one
     if (this.disconnectTimer) {
@@ -1085,7 +1087,7 @@ export default class {
       if (currentSong) {
         this.add(currentSong);
       } else {
-        throw new Error('No song currently playing.');
+        return;
       }
     }
 
