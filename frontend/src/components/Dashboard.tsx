@@ -15,7 +15,6 @@ import AddToQueue from './AddToQueue'
 import BotSettings from './BotSettings'
 import BulkImport from './BulkImport'
 import Settings from './Settings'
-import AutoDj from './AutoDj'
 import PlayerBar from './PlayerBar'
 import SearchPanel from './SearchPanel'
 import Toaster from './Toaster'
@@ -238,10 +237,11 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const handlePositionChange = useCallback((pos: number) => { smoothPositionRef.current = pos }, [])
   const [view, setView] = useState<'player' | 'admin'>('player')
 
-  type RightTab = 'search' | 'queue' | 'effects'
-  const [rightTab, setRightTab] = useState<RightTab>(
-    () => (localStorage.getItem('muse_right_tab') as RightTab) ?? 'queue',
-  )
+  type RightTab = 'search' | 'queue'
+  const [rightTab, setRightTab] = useState<RightTab>(() => {
+    const stored = localStorage.getItem('muse_right_tab')
+    return (stored === 'search' || stored === 'queue') ? stored : 'queue'
+  })
 
   // Admin unlock — bulkToken stored in localStorage (never the raw password)
   const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
@@ -683,7 +683,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
 
             {/* Tab bar */}
             <div className="flex items-center gap-1 px-5 py-3 border-b border-white/[0.07] flex-shrink-0">
-              {(['search', 'queue', 'effects'] as const).map(tab => (
+              {(['search', 'queue'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => { setRightTab(tab); localStorage.setItem('muse_right_tab', tab) }}
@@ -696,7 +696,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 >
                   {tab === 'queue'
                     ? `Queue${(status?.queue?.length ?? 0) > 0 ? ` · ${status!.queue.length}` : ''}${(status?.pendingCount ?? 0) > 0 ? ` +${status!.pendingCount}` : ''}`
-                    : tab === 'search' ? 'Search' : 'Effects'}
+                    : 'Search'}
                 </button>
               ))}
             </div>
@@ -722,14 +722,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   playerStatus={status?.status}
                 />
               )}
-              {rightTab === 'effects' && (
-                <AutoDj
-                  status={status}
-                  token={token}
-                  guildId={primaryGuildId}
-                  onRefresh={poll}
-                />
-              )}
+
             </div>
           </div>
 
