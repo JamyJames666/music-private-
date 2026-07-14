@@ -122,6 +122,19 @@ export default class {
     return [newSongs, extraMsg];
   }
 
+  // Radio: similar tracks seeded from whatever's currently playing, via Spotify's
+  // recommendations API. Resolved to real audio the same way Spotify imports are:
+  // lazily, as a YouTube search, so this works regardless of the seed's own source.
+  async getRadio(seedTitle: string, seedArtist: string, limit = 10): Promise<SongMetadata[]> {
+    if (this.spotifyAPI === undefined) {
+      throw new Error('Spotify is not enabled, set SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET to use radio.');
+    }
+
+    const tracks = await this.spotifyAPI.getRadioTracks(seedTitle, seedArtist, limit);
+    const [songs] = this.spotifyToSongMetadata(tracks, undefined, false);
+    return songs;
+  }
+
   private async youtubeVideoSearch(query: string, shouldSplitChapters: boolean): Promise<SongMetadata[]> {
     return this.youtubeAPI.search(query, shouldSplitChapters);
   }

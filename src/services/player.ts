@@ -19,7 +19,9 @@ import {
   VoiceConnectionStatus,
 } from '@discordjs/voice';
 import FileCacheProvider from './file-cache.js';
+import type GetSongs from './get-songs.js';
 import debug from '../utils/debug.js';
+import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {getYouTubeMediaSource, searchWithYtDlp} from '../utils/yt-dlp.js';
@@ -82,6 +84,9 @@ export default class {
   public guildId: string;
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
+  // Auto-continue with similar tracks once the queue runs dry, gated on someone
+  // actually being in the voice channel so it never plays to an empty room.
+  public radioAutoEnabled = false;
   // Tracks the last Spotify playlist URL and how many songs were loaded
   // so "Load More from Spotify" can fetch the next batch at the right offset.
   public spotifyPlaylistContext: {url: string; loadedCount: number; lyricVideo?: boolean} | null = null;
@@ -121,9 +126,12 @@ export default class {
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
 
-  constructor(fileCache: FileCacheProvider, guildId: string) {
+  private readonly getSongs: GetSongs;
+
+  constructor(fileCache: FileCacheProvider, guildId: string, getSongs: GetSongs) {
     this.fileCache = fileCache;
     this.guildId = guildId;
+    this.getSongs = getSongs;
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -1120,7 +1128,39 @@ export default class {
     }
   }
 
+  private hasHumanListeners(): boolean {
+    return this.currentChannel ? getSizeWithoutBots(this.currentChannel) > 0 : false;
+  }
+
+  // Appends similar tracks seeded from whatever just finished playing.
+  // Returns whether anything was actually added.
+  private async queueRadio(seed: QueuedSong): Promise<boolean> {
+    try {
+      const songs = await this.getSongs.getRadio(seed.title, seed.artist, 10);
+      if (songs.length === 0) {
+        return false;
+      }
+
+      for (const song of songs) {
+        this.add({...song, addedInChannelId: seed.addedInChannelId, requestedBy: 'radio'});
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async finishQueue(): Promise<void> {
+    // Only radio-continue when the queue is genuinely exhausted, not just because
+    // finishQueue() was reached via a paused skip with songs still queued.
+    if (!this.canGoForward(1) && this.radioAutoEnabled && this.nowPlaying && this.hasHumanListeners() && await this.queueRadio(this.nowPlaying)) {
+      // Adding songs only appends; queuePosition still points at the song that just
+      // finished, so advance into the newly added tracks instead of replaying it.
+      await this.forward(1);
+      return;
+    }
+
     this.status = STATUS.IDLE;
     this.audioPlayer?.stop(true);
 

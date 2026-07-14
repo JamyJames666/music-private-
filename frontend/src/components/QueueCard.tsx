@@ -18,9 +18,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Shuffle, GripVertical, X, Music, Trash2, ListMusic,
-  ChevronsUp, Search, LogOut, SkipForward,
+  ChevronsUp, Search, LogOut, SkipForward, Radio,
 } from 'lucide-react'
-import { shuffle, clearQueue, move, remove, disconnect, skip, type TrackInfo } from '@/lib/api'
+import { shuffle, clearQueue, move, remove, disconnect, skip, startRadio, toggleRadioAuto, type TrackInfo } from '@/lib/api'
 import { fmtTime, fmtDuration, cn } from '@/lib/utils'
 import { toast } from '@/lib/use-toast'
 // fmtDuration kept for compatibility
@@ -191,14 +191,18 @@ interface Props {
   nowPlaying?: TrackInfo | null
   isPlaying?: boolean
   playerStatus?: string
+  hasRadio?: boolean
+  radioAutoEnabled?: boolean
 }
 
 function QueueCard({
   queue, token, guildId, onRefresh, nowPlaying = null, isPlaying = false, playerStatus,
+  hasRadio = false, radioAutoEnabled = false,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')
   const [page, setPage]                       = useState(0)
+  const [startingRadio, setStartingRadio]     = useState(false)
 
   const displayQueue = optimisticQueue ?? queue
   // Ref mirror so row callbacks can stay referentially stable (keeps QueueRow memo effective)
@@ -248,6 +252,29 @@ function QueueCard({
   const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh(); toast('Queue shuffled') }
   const handleClearQueue   = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
   const handleDisconnect   = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
+
+  const handleStartRadio = async () => {
+    setStartingRadio(true)
+    try {
+      const res = await startRadio(token, guildId)
+      toast(`Radio added ${res.added} song${res.added === 1 ? '' : 's'}`)
+      onRefresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start radio')
+    } finally {
+      setStartingRadio(false)
+    }
+  }
+
+  const handleToggleRadioAuto = async () => {
+    try {
+      const res = await toggleRadioAuto(token, guildId)
+      toast(res.radioAutoEnabled ? 'Radio will auto-continue the queue' : 'Radio auto-continue off')
+      onRefresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not update radio auto-continue')
+    }
+  }
 
   const handleRemove = useCallback(async (originalIndex: number) => {
     setOptimisticQueue(displayQueueRef.current.filter((_, i) => i !== originalIndex))
@@ -300,6 +327,28 @@ function QueueCard({
           <span className="mr-auto" />
         )}
 
+        {hasRadio && (
+          <>
+            <button
+              className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+              onClick={() => void handleStartRadio()}
+              disabled={!nowPlaying || startingRadio}
+              title="Queue similar tracks now, seeded from what's playing"
+            >
+              <Radio size={12} /> {startingRadio ? 'Starting…' : 'Start Radio'}
+            </button>
+            <button
+              onClick={() => void handleToggleRadioAuto()}
+              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg border transition-all"
+              title={radioAutoEnabled ? 'Auto-continue with radio: on' : 'Auto-continue with radio: off'}
+              style={radioAutoEnabled
+                ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
+                : { background: 'transparent', color: '#666', borderColor: '#333' }}
+            >
+              Auto
+            </button>
+          </>
+        )}
         <button
           className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
           onClick={handleShuffle}

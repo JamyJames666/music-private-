@@ -155,6 +155,39 @@ export default class {
     }
   }
 
+  // Radio: search Spotify for a track matching what just played, then ask for
+  // recommendations seeded from it. Spotify has restricted /recommendations for
+  // most apps registered after Nov 2024, so this throws on that so callers can
+  // tell "nothing similar found" apart from "the API rejected the request".
+  async getRadioTracks(seedTitle: string, seedArtist: string, limit: number): Promise<SpotifyTrack[]> {
+    const [seed] = await this.searchTracks(`${seedTitle} ${seedArtist}`, 1);
+    const seedId = seed?.spotifyUrl ? /\/track\/([A-Za-z0-9]+)/.exec(seed.spotifyUrl)?.[1] : undefined;
+    if (!seedId) {
+      return [];
+    }
+
+    const token = await this.getSearchToken();
+    if (!token) {
+      throw new Error('Could not get a Spotify access token.');
+    }
+
+    try {
+      const raw = await got(
+        `https://api.spotify.com/v1/recommendations?seed_tracks=${seedId}&limit=${limit}`,
+        {headers: {Authorization: `Bearer ${token}`}, timeout: {request: 10_000}},
+      ).text();
+      const body = JSON.parse(raw) as {tracks?: SpotifyApi.TrackObjectFull[]};
+      return (body.tracks ?? []).map(t => this.toSpotifyTrack(t, t.album?.images?.[0]?.url ?? null));
+    } catch (error: unknown) {
+      const status = (error as {response?: {statusCode?: number}}).response?.statusCode;
+      if (status === 403 || status === 404) {
+        throw new Error('Spotify has restricted the recommendations API for this app: radio is unavailable.');
+      }
+
+      throw new Error('Could not fetch Spotify radio tracks.');
+    }
+  }
+
   private async freshEmbedToken(playlistId: string, force = false): Promise<string | null> {
     if (!force && this.embedTokenCache && Date.now() < this.embedTokenCache.expiresAt) {
       return this.embedTokenCache.token;
@@ -302,33 +335,23 @@ export default class {
       ?? (/"accessToken":"([^"]+)"/.exec(html)?.[1])
       ?? null;
 
-    // Only bother paginating if the playlist likely has more than the embed returned.
-    // Check the total track count from the API first so we know what we're dealing with.
+    // The embed baseline never includes thumbnails, only paginateWithEmbedToken does
+    // (it hits the real tracks API, which returns album art). Always use it when we
+    // have a token, even if the embed already covered every track in the playlist:
+    // skipping it here used to leave every track in short playlists with no artwork.
     const tokenToUse = embedToken ?? await this.getAnonymousToken(BROWSER_UA);
 
     if (tokenToUse) {
       try {
-        const firstPageRaw = await got(
-          `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=1&offset=0`,
-          {headers: {Authorization: `Bearer ${tokenToUse}`}, timeout: {request: 8_000}},
-        ).text();
-        const firstPage = JSON.parse(firstPageRaw) as {total?: number};
-        const totalInPlaylist = firstPage.total ?? 0;
-
-        if (totalInPlaylist > entity.trackList.length) {
-          // Playlist has more songs than the embed returned — paginate the full list
-          const paginated = await this.paginateWithEmbedToken(tokenToUse, playlistId, Math.min(playlistLimit, totalInPlaylist));
-          if (paginated.length > tracks.length) {
-            tracks = paginated;
-          }
-        }
-        // If totalInPlaylist <= embed count, the embed already gave us everything
-      } catch {
-        // Could not check total — attempt pagination anyway as a best-effort
         const paginated = await this.paginateWithEmbedToken(tokenToUse, playlistId, playlistLimit);
-        if (paginated.length > tracks.length) {
+        // Pagination can return early on a partial failure (rate limit outlasting
+        // its retries); only replace the baseline if it covers at least as much
+        // as we already have, so a partial fetch never loses tracks.
+        if (paginated.length >= tracks.length) {
           tracks = paginated;
         }
+      } catch {
+        // Keep the thumbnail-less embed baseline as a last resort.
       }
     }
 

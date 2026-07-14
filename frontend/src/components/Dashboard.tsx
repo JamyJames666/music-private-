@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
-import { Settings as SettingsIcon, ChevronRight, ChevronDown, Lock, X } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Settings as SettingsIcon, ChevronRight, ChevronDown, X } from 'lucide-react'
 import {
-  getGuilds, getChannels, getStatus, pause, resume, skip, seek, bulkLogin,
+  getGuilds, getChannels, getStatus, pause, resume, skip, seek,
   ApiError,
   type Guild, type Channel, type PlayerStatus,
 } from '@/lib/api'
@@ -17,10 +17,12 @@ import BulkImport from './BulkImport'
 import Settings from './Settings'
 import PlayerBar from './PlayerBar'
 import SearchPanel from './SearchPanel'
+import FocusMode from './FocusMode'
 import Toaster from './Toaster'
 
 interface Props {
   token: string
+  isAdmin: boolean
   onSessionExpired: () => void
   onReconnecting: (v: boolean) => void
 }
@@ -216,7 +218,7 @@ const EMPTY_QUEUE: PlayerStatus['queue'] = []
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 
-export default function Dashboard({ token, onSessionExpired, onReconnecting }: Props) {
+export default function Dashboard({ token, isAdmin, onSessionExpired, onReconnecting }: Props) {
   const [guilds, setGuilds] = useState<Guild[]>([])
 
   // Up to 2 selected guild IDs — primary is [0], secondary is [1]
@@ -236,21 +238,13 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   const smoothPositionRef = useRef(0)
   const handlePositionChange = useCallback((pos: number) => { smoothPositionRef.current = pos }, [])
   const [view, setView] = useState<'player' | 'admin'>('player')
+  const [showFocus, setShowFocus] = useState(false)
 
   type RightTab = 'search' | 'queue'
   const [rightTab, setRightTab] = useState<RightTab>(() => {
     const stored = localStorage.getItem('muse_right_tab')
     return (stored === 'search' || stored === 'queue') ? stored : 'queue'
   })
-
-  // Admin unlock — bulkToken stored in localStorage (never the raw password)
-  const [adminToken,    setAdminToken]    = useState<string | null>(() => localStorage.getItem('muse_admin_token'))
-  const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(localStorage.getItem('muse_admin_token')))
-  const [showAdminPw,   setShowAdminPw]   = useState(false)
-  const [adminPw,       setAdminPw]       = useState('')
-  const [adminPwError,  setAdminPwError]  = useState('')
-  const [adminPwLoading, setAdminPwLoading] = useState(false)
-  const [rememberMe,    setRememberMe]    = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('muse_theme') as 'dark' | 'light') ?? 'dark',
@@ -396,14 +390,14 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
   }, [primaryGuildId, poll])
 
   // Keyboard shortcuts — Space play/pause, ←/→ seek 10s, N skip.
-  // Ignored while typing or when the admin view / password modal is up.
+  // Ignored while typing or when the admin view is up.
   const statusRef = useRef(status)
   statusRef.current = status
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
-      if (view !== 'player' || showAdminPw || !primaryGuildId) return
+      if (view !== 'player' || !primaryGuildId) return
       const s = statusRef.current
       if (!s || s.status === 'IDLE') return
 
@@ -427,7 +421,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view, showAdminPw, token, primaryGuildId, poll])
+  }, [view, token, primaryGuildId, poll])
 
   const addGuild = (id: string) => {
     const next = [...selectedGuildIds.filter(g => g !== id), id].slice(0, MAX_GUILDS)
@@ -476,141 +470,74 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
               onSwitch={setPrimaryGuild}
             />
           )}
-          <div className="ml-auto">
-            <button
-              onClick={() => {
-                if (view === 'admin') { setView('player'); return }
-                if (adminUnlocked) { setView('admin'); return }
-                setShowAdminPw(true)
-              }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
-              style={view === 'admin'
-                ? { color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)', background: 'rgb(var(--accent-rgb) / 0.1)' }
-                : { color: '#888', background: 'transparent' }}
-              title="Settings"
-            >
-              <SettingsIcon size={14} />
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="ml-auto">
+              <button
+                onClick={() => setView(v => v === 'admin' ? 'player' : 'admin')}
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-app-border"
+                style={view === 'admin'
+                  ? { color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)', background: 'rgb(var(--accent-rgb) / 0.1)' }
+                  : { color: '#888', background: 'transparent' }}
+                title="Settings"
+              >
+                <SettingsIcon size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      {view === 'admin' ? (
-        adminUnlocked ? (
-          <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <SettingsIcon size={18} style={{ color: 'rgb(var(--accent-rgb))' }} />
-                <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))' }}>
-                  {primaryGuild?.name ?? primaryGuildId}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setAdminUnlocked(false)
-                  setAdminToken(null)
-                  localStorage.removeItem('muse_admin_token')
-                  setView('player')
-                }}
-                className="text-xs px-3 py-1.5 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
-              >
-                Sign out
-              </button>
-            </div>
-
-            {/* Settings section */}
-            <Settings
-              token={token}
-              guildId={primaryGuildId}
-              guildName={primaryGuild?.name ?? ''}
-              theme={theme}
-              onThemeChange={setTheme}
-              guilds={guilds}
-              selectedIds={selectedGuildIds}
-              onAddGuild={addGuild}
-              onRemoveGuild={removeGuild}
-              onSetPrimary={setPrimaryGuild}
-            />
-
-            {/* Divider */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
-
-            {/* Bot Settings section */}
-            <BotSettings token={token} guildId={primaryGuildId} />
-
-            {/* Divider */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
-
-            {/* Bulk Import section */}
-            <BulkImport
-              token={token}
-              guildId={primaryGuildId}
-              channels={primaryChannels}
-              channelId={primaryChannelId}
-              onChannelChange={handlePrimaryChannelChange}
-              onRefresh={poll}
-              externalBulkToken={adminToken ?? undefined}
-            />
-          </div>
-        ) : (
-          // Not yet unlocked — show password prompt inline
-          <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
-                style={{ background: 'rgb(var(--accent-rgb) / 0.15)' }}>
-                <Lock size={20} style={{ color: 'rgb(var(--accent-rgb))' }} />
-              </div>
+      {view === 'admin' && isAdmin ? (
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <SettingsIcon size={18} style={{ color: 'rgb(var(--accent-rgb))' }} />
               <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-              <p className="text-sm" style={{ color: '#666' }}>Enter the admin password to continue.</p>
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))' }}>
+                {primaryGuild?.name ?? primaryGuildId}
+              </span>
             </div>
-            <form onSubmit={async (e: FormEvent) => {
-              e.preventDefault()
-              setAdminPwLoading(true)
-              setAdminPwError('')
-              try {
-                const { bulkToken: bt } = await bulkLogin(adminPw)
-                setAdminToken(bt)
-                setAdminUnlocked(true)
-                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
-                setAdminPw('')
-              } catch {
-                setAdminPwError('Incorrect password.')
-              } finally {
-                setAdminPwLoading(false)
-              }
-            }} className="space-y-3">
-              <input
-                type="password"
-                autoFocus
-                className="input w-full"
-                placeholder="Password"
-                value={adminPw}
-                onChange={e => setAdminPw(e.target.value)}
-              />
-              {adminPwError && <p className="text-xs text-app-danger">{adminPwError}</p>}
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="sr-only"
-                />
-                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-                </span>
-                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
-              </label>
-              <button
-                type="submit"
-                disabled={adminPwLoading || !adminPw}
-                className="btn-primary w-full py-2.5"
-              >
-                {adminPwLoading ? 'Checking…' : 'Unlock'}
-              </button>
-            </form>
+            <button
+              onClick={() => setView('player')}
+              className="text-xs px-3 py-1.5 rounded-lg border border-app-border text-app-muted hover:text-white transition-colors"
+            >
+              Back
+            </button>
           </div>
-        )
+
+          {/* Settings section */}
+          <Settings
+            token={token}
+            guildId={primaryGuildId}
+            guildName={primaryGuild?.name ?? ''}
+            theme={theme}
+            onThemeChange={setTheme}
+            guilds={guilds}
+            selectedIds={selectedGuildIds}
+            onAddGuild={addGuild}
+            onRemoveGuild={removeGuild}
+            onSetPrimary={setPrimaryGuild}
+          />
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
+          {/* Bot Settings section */}
+          <BotSettings token={token} guildId={primaryGuildId} />
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
+          {/* Bulk Import section */}
+          <BulkImport
+            token={token}
+            guildId={primaryGuildId}
+            channels={primaryChannels}
+            channelId={primaryChannelId}
+            onChannelChange={handlePrimaryChannelChange}
+            onRefresh={poll}
+          />
+        </div>
       ) : (
         <div
           className="relative flex flex-col lg:flex-row lg:overflow-hidden pb-[72px]"
@@ -649,6 +576,7 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                 guildId={primaryGuildId}
                 onRefresh={poll}
                 onPositionChange={handlePositionChange}
+                onExpand={() => setShowFocus(true)}
               />
               <AddToQueue
                 token={token}
@@ -720,6 +648,8 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
                   nowPlaying={status?.nowPlaying ?? null}
                   isPlaying={status?.status === 'PLAYING'}
                   playerStatus={status?.status}
+                  hasRadio={status?.hasRadio ?? false}
+                  radioAutoEnabled={status?.radioAutoEnabled ?? false}
                 />
               )}
 
@@ -738,70 +668,15 @@ export default function Dashboard({ token, onSessionExpired, onReconnecting }: P
         </div>
       )}
 
-      {/* Admin password modal — triggered from settings gear when not yet unlocked */}
-      {showAdminPw && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowAdminPw(false); setAdminPw(''); setAdminPwError('') } }}>
-          <div className="card p-6 w-full max-w-sm space-y-4 mx-4">
-            <div className="flex items-center gap-2">
-              <Lock size={16} style={{ color: 'rgb(var(--accent-rgb))' }} />
-              <h2 className="text-sm font-semibold text-white">Admin Panel</h2>
-            </div>
-            <p className="text-xs" style={{ color: '#666' }}>
-              Enter the admin password to access settings and bulk import.
-            </p>
-            <form onSubmit={async (e: FormEvent) => {
-              e.preventDefault()
-              setAdminPwLoading(true)
-              setAdminPwError('')
-              try {
-                const { bulkToken: bt } = await bulkLogin(adminPw)
-                setAdminToken(bt)
-                setAdminUnlocked(true)
-                if (rememberMe) localStorage.setItem('muse_admin_token', bt)
-                setShowAdminPw(false)
-                setAdminPw('')
-                setView('admin')
-              } catch {
-                setAdminPwError('Incorrect password.')
-              } finally {
-                setAdminPwLoading(false)
-              }
-            }} className="space-y-3">
-              <input
-                type="password"
-                autoFocus
-                className="input w-full"
-                placeholder="Password"
-                value={adminPw}
-                onChange={e => setAdminPw(e.target.value)}
-              />
-              {adminPwError && (
-                <p className="text-xs text-app-danger">{adminPwError}</p>
-              )}
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="sr-only"
-                />
-                <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${rememberMe ? 'bg-app-accent' : 'bg-app-border'}`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${rememberMe ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-                </span>
-                <span className="text-xs" style={{ color: '#aaa' }}>Remember me</span>
-              </label>
-              <button
-                type="submit"
-                disabled={adminPwLoading || !adminPw}
-                className="btn-primary w-full py-2 text-sm"
-              >
-                {adminPwLoading ? 'Checking…' : 'Unlock'}
-              </button>
-            </form>
-          </div>
-        </div>
+      {showFocus && (
+        <FocusMode
+          status={status}
+          token={token}
+          guildId={primaryGuildId}
+          onRefresh={poll}
+          onPositionChange={handlePositionChange}
+          onClose={() => setShowFocus(false)}
+        />
       )}
 
       <Toaster />

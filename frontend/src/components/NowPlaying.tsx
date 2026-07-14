@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, SkipForward, Square, Music, Repeat, Repeat1, Volume2 } from 'lucide-react'
+import { Play, Pause, SkipForward, Square, Music, Repeat, Repeat1, Volume2, Maximize2 } from 'lucide-react'
 import { pause, resume, skip, stop, setVolume, toggleLoopSong, toggleLoopQueue, type PlayerStatus } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
@@ -11,9 +11,10 @@ interface Props {
   guildId: string
   onRefresh: () => void
   onPositionChange?: (pos: number) => void
+  onExpand?: () => void
 }
 
-export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange }: Props) {
+export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange, onExpand }: Props) {
   const playback   = useRef({ pos: 0, len: 0, rate: 1, playing: false, url: '' })
   const barRef     = useRef<HTMLDivElement>(null)
   const elapsedRef = useRef<HTMLSpanElement>(null)
@@ -238,6 +239,18 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
               <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
             </div>
+            {/* Expand to focus mode. Always visible (not hover-only) so it's reachable on touch. */}
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center
+                           transition-all hover:scale-110 active:scale-95"
+                style={{ color: '#fff', background: 'rgba(0,0,0,0.45)' }}
+                title="Expand"
+              >
+                <Maximize2 size={13} />
+              </button>
+            )}
           </div>
 
           {/* Title + artist */}

@@ -178,8 +178,13 @@ export default class WebServer {
         record.count++;
       }
 
+      // Whichever password matches decides the session's role: WEB_PASSWORD logs
+      // in as a regular user, BULK_ADD_PASSWORD (if configured) logs in as admin.
+      // There is no separate in-session elevation step; log in again to change role.
       const {password} = req.body as {password?: string};
-      if (password !== this.password) {
+      const isAdminLogin = this.hasAdminPassword() && password === this.config.BULK_ADD_PASSWORD;
+      const isUserLogin = password === this.password;
+      if (!isAdminLogin && !isUserLogin) {
         res.status(401).json({error: 'Invalid password'});
         return;
       }
@@ -189,42 +194,39 @@ export default class WebServer {
         entry.count = 0;
       }
 
-      res.json({token: this.generateToken()});
-    });
-
-    // Bulk import login — same flow as main login but uses BULK_ADD_PASSWORD
-    // Diagnostic — tells the frontend whether BULK_ADD_PASSWORD is configured
-    // without revealing the actual value. No auth required.
-    this.app.get('/api/bulk-configured', (_req: express.Request, res: express.Response) => {
-      const pw = this.config.BULK_ADD_PASSWORD;
-      res.json({configured: Boolean(pw), length: pw.length});
-    });
-
-    this.app.post('/api/bulk-login', (req: express.Request, res: express.Response) => {
-      const bulkPw = this.config.BULK_ADD_PASSWORD;
-      if (!bulkPw) {
-        res.status(401).json({error: 'BULK_ADD_PASSWORD is not set — add it to .env and restart'});
-        return;
-      }
-
-      const {password} = req.body as {password?: string};
-      if ((password ?? '') !== bulkPw) {
-        res.status(401).json({error: 'Invalid bulk import password'});
-        return;
-      }
-
-      res.json({bulkToken: this.generateToken(bulkPw)});
+      const secret = isAdminLogin ? this.config.BULK_ADD_PASSWORD : this.password;
+      res.json({token: this.generateToken(secret), isAdmin: isAdminLogin});
     });
 
     const auth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const header = req.headers.authorization ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-      if (!this.verifyToken(token)) {
+      if (!this.verifyToken(token) && !this.isAdminToken(token)) {
         res.status(401).json({error: 'Unauthorized'});
         return;
       }
 
       next();
+    };
+
+    // Stricter gate for admin-only mutations (settings, bulk import): a valid
+    // session alone isn't enough, the token must have been issued by BULK_ADD_PASSWORD.
+    // 401 (not 403) for a token that isn't valid at all, so the frontend's expired-
+    // session handling still fires instead of showing a permanent "access required" error.
+    const adminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const header = req.headers.authorization ?? '';
+      const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (this.isAdminToken(token)) {
+        next();
+        return;
+      }
+
+      if (this.verifyToken(token)) {
+        res.status(403).json({error: 'Admin access required'});
+        return;
+      }
+
+      res.status(401).json({error: 'Unauthorized'});
     };
 
     this.app.get('/api/guilds', auth, (_req: express.Request, res: express.Response) => {
@@ -323,7 +325,7 @@ export default class WebServer {
       res.json({announcementChannelId: settings.announcementChannelId ?? null});
     });
 
-    this.app.post('/api/guilds/:guildId/settings/announcement', auth, async (req: express.Request, res: express.Response) => {
+    this.app.post('/api/guilds/:guildId/settings/announcement', adminAuth, async (req: express.Request, res: express.Response) => {
       const {channelId} = req.body as {channelId?: string | null};
 
       // ChannelId = null means "reset to auto-detect"
@@ -344,7 +346,7 @@ export default class WebServer {
       res.json({open: (settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true});
     });
 
-    this.app.post('/api/guilds/:guildId/settings/song-requests', auth, async (req: express.Request, res: express.Response) => {
+    this.app.post('/api/guilds/:guildId/settings/song-requests', adminAuth, async (req: express.Request, res: express.Response) => {
       const {open} = req.body as {open?: boolean};
       if (typeof open !== 'boolean') {
         res.status(400).json({error: 'open (boolean) is required'});
@@ -363,7 +365,7 @@ export default class WebServer {
       }
     });
 
-    this.app.post('/api/guilds/:guildId/settings/accent', auth, async (req: express.Request, res: express.Response) => {
+    this.app.post('/api/guilds/:guildId/settings/accent', adminAuth, async (req: express.Request, res: express.Response) => {
       const {accentColor} = req.body as {accentColor?: string};
       if (typeof accentColor !== 'string') {
         res.status(400).json({error: 'accentColor (string) is required'});
@@ -387,7 +389,7 @@ export default class WebServer {
       res.json({enabled: (settings as unknown as {webOnlyMode?: boolean}).webOnlyMode ?? false});
     });
 
-    this.app.post('/api/guilds/:guildId/settings/web-only-mode', auth, async (req: express.Request, res: express.Response) => {
+    this.app.post('/api/guilds/:guildId/settings/web-only-mode', adminAuth, async (req: express.Request, res: express.Response) => {
       const {enabled} = req.body as {enabled?: boolean};
       if (typeof enabled !== 'boolean') {
         res.status(400).json({error: 'enabled (boolean) is required'});
@@ -411,7 +413,7 @@ export default class WebServer {
       res.json({enabled: (settings as unknown as {adminOnly?: boolean}).adminOnly ?? false});
     });
 
-    this.app.post('/api/guilds/:guildId/settings/admin-only', auth, async (req: express.Request, res: express.Response) => {
+    this.app.post('/api/guilds/:guildId/settings/admin-only', adminAuth, async (req: express.Request, res: express.Response) => {
       const {enabled} = req.body as {enabled?: boolean};
       if (typeof enabled !== 'boolean') {
         res.status(400).json({error: 'enabled (boolean) is required'});
@@ -456,7 +458,7 @@ export default class WebServer {
     this.app.post('/api/guilds/:guildId/play', async (req: express.Request, res: express.Response) => {
       const header = req.headers.authorization ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-      if (!this.verifyToken(token)) {
+      if (!this.verifyToken(token) && !this.isAdminToken(token)) {
         const settings = await getGuildSettings(req.params.guildId);
         const isAdminOnly = (settings as unknown as {adminOnly?: boolean}).adminOnly ?? false;
         const isOpen = (settings as unknown as {songRequestsOpen?: boolean}).songRequestsOpen ?? true;
@@ -592,6 +594,8 @@ export default class WebServer {
         crossfade: player.getCrossfade(),
         loopSong: player.loopCurrentSong,
         loopQueue: player.loopCurrentQueue,
+        radioAutoEnabled: player.radioAutoEnabled,
+        hasRadio: Boolean(this.spotifyApi),
         activeChannelIds: player.getActiveChannelIds(),
         pendingCount: player.getPendingCount(),
         pendingPreview: player.getPendingPreview(20).map(s => ({title: s.title, artist: s.artist})),
@@ -950,16 +954,43 @@ export default class WebServer {
       res.json({ok: true, loopQueue: player.loopCurrentQueue});
     });
 
-    // Bulk import: accepts lines in "Artist - Title" format, adds each as a search.
-    // Authenticated via bulkToken from /api/bulk-login (same mechanism as main auth).
-    this.app.post('/api/guilds/:guildId/queue/bulk-import', auth, async (req: express.Request, res: express.Response) => {
-      const {bulkToken, queries, channelId} = req.body as {bulkToken?: string; queries?: string[]; channelId?: string};
+    // Auto-continue with similar tracks once the queue runs dry (only ever
+    // triggers while someone is actually in the voice channel).
+    this.app.post('/api/guilds/:guildId/radio-auto', auth, (req: express.Request, res: express.Response) => {
+      const player = this.playerManager.get(req.params.guildId);
+      player.radioAutoEnabled = !player.radioAutoEnabled;
+      res.json({ok: true, radioAutoEnabled: player.radioAutoEnabled});
+    });
 
-      const bulkPw = this.config.BULK_ADD_PASSWORD;
-      if (!bulkPw || !bulkToken || !this.verifyToken(bulkToken, bulkPw)) {
-        res.status(401).json({error: 'Invalid or expired bulk token — log in again'});
+    // Manual "Start Radio": pulls similar tracks now, seeded from whatever's playing.
+    this.app.post('/api/guilds/:guildId/queue/radio', auth, async (req: express.Request, res: express.Response) => {
+      const player = this.playerManager.get(req.params.guildId);
+      const current = player.getCurrent();
+      if (!current) {
+        res.status(400).json({error: 'Nothing is playing to seed radio from.'});
         return;
       }
+
+      try {
+        const songs = await this.getSongs.getRadio(current.title, current.artist, 10);
+        if (songs.length === 0) {
+          res.status(400).json({error: 'Could not find any similar tracks.'});
+          return;
+        }
+
+        for (const song of songs) {
+          player.add({...song, addedInChannelId: current.addedInChannelId, requestedBy: 'radio'});
+        }
+
+        res.json({ok: true, added: songs.length});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    // Bulk import: accepts lines in "Artist - Title" format, adds each as a search.
+    this.app.post('/api/guilds/:guildId/queue/bulk-import', adminAuth, async (req: express.Request, res: express.Response) => {
+      const {queries, channelId} = req.body as {queries?: string[]; channelId?: string};
 
       if (!Array.isArray(queries) || queries.length === 0) {
         res.status(400).json({error: 'queries array is required'});
@@ -1097,6 +1128,14 @@ export default class WebServer {
     for (const res of clients) {
       res.write(payload);
     }
+  }
+
+  private hasAdminPassword(): boolean {
+    return Boolean(this.config.BULK_ADD_PASSWORD);
+  }
+
+  private isAdminToken(token: string): boolean {
+    return this.hasAdminPassword() && this.verifyToken(token, this.config.BULK_ADD_PASSWORD);
   }
 
   private generateToken(secret = this.password): string {

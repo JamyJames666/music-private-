@@ -179,20 +179,26 @@ export default function AddToQueue({ token, guildId, channels, channelId, onChan
         </p>
       )}
 
-      {/* Switch channel — hidden in compact (left panel) mode */}
-      {!compact && channels.length > 0 && (
+      {/* Switch channel: moves the bot; it pauses on switch, press play to resume there */}
+      {channels.length > 0 && (
         <div className="pt-2 border-t space-y-1.5" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#888' }}>Switch channel</p>
           <div className="flex flex-wrap gap-1.5">
             {channels.map(c => {
-              const active = activeChannelIds.includes(c.id)
+              const isCurrent = activeChannelIds.includes(c.id)
               return (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => moveChannel(token, guildId, c.id).then(onRefresh).catch(() => null)}
-                  className="text-xs px-2.5 py-1 rounded-lg border transition-all"
-                  style={active
+                  disabled={isCurrent}
+                  onClick={() => {
+                    void moveChannel(token, guildId, c.id).then(() => {
+                      onRefresh()
+                      toast(`Switched to ${c.name}, press play to resume`)
+                    }).catch(() => null)
+                  }}
+                  className="text-xs px-2.5 py-1 rounded-lg border transition-all active:scale-95 disabled:cursor-default"
+                  style={isCurrent
                     ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
                     : { background: 'transparent', color: '#666', borderColor: '#333' }}
                 >

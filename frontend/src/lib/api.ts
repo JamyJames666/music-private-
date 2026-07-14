@@ -26,6 +26,8 @@ export interface PlayerStatus {
   crossfade:  number
   loopSong:          boolean
   loopQueue:         boolean
+  radioAutoEnabled:  boolean
+  hasRadio:          boolean
   activeChannelIds:  string[]
   pendingCount:      number
   spotifyHasMore:    boolean
@@ -70,7 +72,7 @@ async function req<T>(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function login(password: string): Promise<string> {
+export async function login(password: string): Promise<{ token: string; isAdmin: boolean }> {
   const res = await fetch('/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -80,8 +82,7 @@ export async function login(password: string): Promise<string> {
     const data = await res.json().catch(() => ({ error: 'Login failed' })) as { error?: string }
     throw new Error(data.error ?? 'Login failed')
   }
-  const { token } = await res.json() as { token: string }
-  return token
+  return await res.json() as Promise<{ token: string; isAdmin: boolean }>
 }
 
 export const getGuilds      = (t: string) => req<Guild[]>('GET', '/api/guilds', t)
@@ -130,6 +131,10 @@ export const toggleLoopSong  = (t: string, guildId: string) =>
   req('POST', `/api/guilds/${guildId}/loop-song`,  t)
 export const toggleLoopQueue = (t: string, guildId: string) =>
   req('POST', `/api/guilds/${guildId}/loop-queue`, t)
+export const toggleRadioAuto = (t: string, guildId: string) =>
+  req<{ok: boolean; radioAutoEnabled: boolean}>('POST', `/api/guilds/${guildId}/radio-auto`, t)
+export const startRadio = (t: string, guildId: string) =>
+  req<{ok: boolean; added: number}>('POST', `/api/guilds/${guildId}/queue/radio`, t)
 export const joinChannel  = (t: string, guildId: string, channelId: string) =>
   req<{ok: boolean; activeChannelIds: string[]}>('POST', `/api/guilds/${guildId}/channels/join`,  t, {channelId})
 export const leaveChannel = (t: string, guildId: string, channelId: string) =>
@@ -142,12 +147,8 @@ export const refreshThumbnails    = (t: string, guildId: string) =>
   req<{ok: boolean; missing: number}>('POST', `/api/guilds/${guildId}/queue/refresh-thumbnails`, t)
 export const loadMoreSpotify      = (t: string, guildId: string) =>
   req<{ok: boolean; added: number; nextOffset: number; message?: string}>('POST', `/api/guilds/${guildId}/queue/load-more-spotify`, t)
-export const bulkConfigured = () =>
-  fetch('/api/bulk-configured').then(r => r.json() as Promise<{configured: boolean; length: number}>)
-export const bulkLogin  = (password: string) =>
-  req<{bulkToken: string}>('POST', '/api/bulk-login', '', {password})
-export const bulkImport = (t: string, guildId: string, queries: string[], channelId: string, bulkToken: string) =>
-  req<{ok: boolean; added: number}>('POST', `/api/guilds/${guildId}/queue/bulk-import`, t, {queries, channelId, bulkToken})
+export const bulkImport = (t: string, guildId: string, queries: string[], channelId: string) =>
+  req<{ok: boolean; added: number}>('POST', `/api/guilds/${guildId}/queue/bulk-import`, t, {queries, channelId})
 
 export const getSongRequestSetting = (t: string, guildId: string) =>
   req<{open: boolean}>('GET', `/api/guilds/${guildId}/settings/song-requests`, t)
