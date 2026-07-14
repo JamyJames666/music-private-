@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { Play, Pause, SkipForward, Square } from 'lucide-react'
 import { pause, resume, skip, stop, seek, type PlayerStatus } from '@/lib/api'
 import { fmtTime } from '@/lib/utils'
@@ -18,7 +18,14 @@ export default function PlayerBar({ status, token, guildId, onRefresh, onPositio
   const { playback, barRef, elapsedRef } = usePlaybackProgress(status, onPositionChange)
 
   const np = status?.nowPlaying ?? null
-  const isPlaying = status?.status === 'PLAYING'
+
+  // Flip instantly on click instead of waiting for the next poll/SSE round trip.
+  const [optimisticPlaying, setOptimisticPlaying] = useState<boolean | null>(null)
+  const serverPlaying = status?.status === 'PLAYING'
+  useEffect(() => {
+    if (optimisticPlaying !== null && serverPlaying === optimisticPlaying) setOptimisticPlaying(null)
+  }, [serverPlaying, optimisticPlaying])
+  const isPlaying = optimisticPlaying ?? serverPlaying
   const len = np?.length ?? 0
   const queue = status?.queue ?? []
   const trackIndex = np ? queue.findIndex(t => t.url === np.url) : -1
@@ -37,6 +44,15 @@ export default function PlayerBar({ status, token, guildId, onRefresh, onPositio
   const call = useCallback(async (fn: () => Promise<unknown>) => {
     try { await fn() } catch { /* best-effort */ } finally { onRefresh() }
   }, [onRefresh])
+
+  const handlePlayPause = useCallback(async () => {
+    const wasPlaying = isPlaying
+    setOptimisticPlaying(!wasPlaying)
+    playback.current.playing = !wasPlaying
+    try { await (wasPlaying ? pause(token, guildId) : resume(token, guildId)) }
+    catch { setOptimisticPlaying(null); playback.current.playing = wasPlaying }
+    onRefresh()
+  }, [isPlaying, playback, token, guildId, onRefresh])
 
   return (
     <div
@@ -110,9 +126,9 @@ export default function PlayerBar({ status, token, guildId, onRefresh, onPositio
         {/* Controls — visible on all sizes */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
-            onClick={() => void call(() => isPlaying ? pause(token, guildId) : resume(token, guildId))}
+            onClick={() => void handlePlayPause()}
             disabled={!np}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-30"
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-90 disabled:opacity-30"
             style={{
               background: np ? 'rgb(var(--accent-rgb) / 0.2)' : 'transparent',
               border: '1px solid rgb(var(--accent-rgb) / 0.4)',

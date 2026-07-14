@@ -43,8 +43,11 @@ export default function SearchPanel({ token, guildId, channelId, onRefresh }: Pr
   const handleInput = (value: string) => {
     setQuery(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!value.trim()) { setResults([]); setError(null); return }
-    debounceRef.current = setTimeout(() => void doSearch(value, source), 400)
+    if (!value.trim()) { setResults([]); setError(null); setLoading(false); return }
+    // Show the skeleton the instant the user types, don't wait on the debounce
+    // to fire before giving any feedback — that dead air is what reads as slow.
+    setLoading(true)
+    debounceRef.current = setTimeout(() => void doSearch(value, source), 300)
   }
 
   const handleSourceSwitch = (src: Source) => {
