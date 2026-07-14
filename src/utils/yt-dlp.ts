@@ -327,13 +327,22 @@ export interface YtDlpPlaylistResult {
 }
 
 export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlaylistResult> => {
+  // YouTube's Mix/Radio playlists (RD-prefixed) come back as "This playlist type
+  // is unviewable" when fetched as a standalone playlist; they only resolve via
+  // the watch page of the video they're attached to.
+  const isMix = playlistId.startsWith('RD');
+  const target = isMix
+    ? `https://www.youtube.com/watch?v=${playlistId.slice(2)}&list=${playlistId}`
+    : `https://www.youtube.com/playlist?list=${playlistId}`;
+
   try {
     const {stdout} = await execa(getExecutable(), [
       '--flat-playlist',
+      ...(isMix ? ['--yes-playlist'] : []),
       '--dump-single-json',
       '--no-warnings',
       '--no-cache-dir',
-      `https://www.youtube.com/playlist?list=${playlistId}`,
+      target,
     ], {timeout: 60_000});
 
     return JSON.parse(stdout) as YtDlpPlaylistResult;
