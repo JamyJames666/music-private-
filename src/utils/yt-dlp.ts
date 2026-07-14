@@ -326,7 +326,7 @@ export interface YtDlpPlaylistResult {
   readonly entries: YtDlpPlaylistEntry[];
 }
 
-export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlaylistResult | null> => {
+export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlaylistResult> => {
   try {
     const {stdout} = await execa(getExecutable(), [
       '--flat-playlist',
@@ -337,8 +337,8 @@ export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlayl
     ], {timeout: 60_000});
 
     return JSON.parse(stdout) as YtDlpPlaylistResult;
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    throw new Error(getExecaErrorMessage(error));
   }
 };
 
