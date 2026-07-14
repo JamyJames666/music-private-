@@ -3,6 +3,7 @@ import * as spotifyURI from 'spotify-uri';
 import {SongMetadata, QueuedPlaylist, MediaSource} from './player.js';
 import {TYPES} from '../types.js';
 import ffmpeg from 'fluent-ffmpeg';
+import getYouTubeID from 'get-youtube-id';
 import YoutubeAPI from './youtube-api.js';
 import SpotifyAPI, {SpotifyTrack} from './spotify-api.js';
 import {URL} from 'node:url';
@@ -122,17 +123,16 @@ export default class {
     return [newSongs, extraMsg];
   }
 
-  // Radio: similar tracks seeded from whatever's currently playing, via Spotify's
-  // recommendations API. Resolved to real audio the same way Spotify imports are:
-  // lazily, as a YouTube search, so this works regardless of the seed's own source.
-  async getRadio(seedTitle: string, seedArtist: string, limit = 10): Promise<SongMetadata[]> {
-    if (this.spotifyAPI === undefined) {
-      throw new Error('Spotify is not enabled, set SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET to use radio.');
+  // Radio: YouTube's own auto-generated Mix for whatever's currently playing.
+  // Seeded from the resolved YouTube video, so this works regardless of whether
+  // the now-playing song originally came from YouTube or was a Spotify import.
+  async getRadio(seedUrl: string, limit = 10): Promise<SongMetadata[]> {
+    const seedVideoId = seedUrl.length === 11 ? seedUrl : getYouTubeID(seedUrl);
+    if (!seedVideoId) {
+      throw new Error('Could not determine a YouTube video to seed radio from.');
     }
 
-    const tracks = await this.spotifyAPI.getRadioTracks(seedTitle, seedArtist, limit);
-    const [songs] = this.spotifyToSongMetadata(tracks, undefined, false);
-    return songs;
+    return this.youtubeAPI.getMix(seedVideoId, limit);
   }
 
   private async youtubeVideoSearch(query: string, shouldSplitChapters: boolean): Promise<SongMetadata[]> {

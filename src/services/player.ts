@@ -1136,7 +1136,7 @@ export default class {
   // Returns whether anything was actually added.
   private async queueRadio(seed: QueuedSong): Promise<boolean> {
     try {
-      const songs = await this.getSongs.getRadio(seed.title, seed.artist, 10);
+      const songs = await this.getSongs.getRadio(seed.url, 10);
       if (songs.length === 0) {
         return false;
       }

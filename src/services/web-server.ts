@@ -972,7 +972,7 @@ export default class WebServer {
       }
 
       try {
-        const songs = await this.getSongs.getRadio(current.title, current.artist, 10);
+        const songs = await this.getSongs.getRadio(current.url, 10);
         if (songs.length === 0) {
           res.status(400).json({error: 'Could not find any similar tracks.'});
           return;
