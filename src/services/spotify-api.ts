@@ -11,6 +11,7 @@ export interface SpotifyTrack {
   artist: string;
   durationSeconds: number;
   thumbnailUrl: string | null;
+  spotifyUrl?: string;
 }
 
 @injectable()
@@ -121,6 +122,37 @@ export default class {
     return this.limitTracks(body.tracks, playlistLimit).map(t =>
       this.toSpotifyTrack(t, (t).album?.images?.[0]?.url ?? null),
     );
+  }
+
+  async searchTracks(query: string, limit: number): Promise<SpotifyTrack[]> {
+    const token = await this.getSearchToken();
+    if (!token) {
+      return [];
+    }
+
+    try {
+      interface SearchTrackItem {
+        name: string;
+        artists: Array<{name: string}>;
+        duration_ms: number;
+        album: {images: Array<{url: string}>};
+        external_urls: {spotify: string};
+      }
+      const raw = await got(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`,
+        {headers: {Authorization: `Bearer ${token}`}, timeout: {request: 10_000}},
+      ).text();
+      const body = JSON.parse(raw) as {tracks?: {items: SearchTrackItem[]}};
+      return (body.tracks?.items ?? []).map(t => ({
+        name: t.name,
+        artist: t.artists[0]?.name ?? '',
+        durationSeconds: Math.round(t.duration_ms / 1000),
+        thumbnailUrl: t.album.images[0]?.url ?? null,
+        spotifyUrl: t.external_urls.spotify,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   private async freshEmbedToken(playlistId: string, force = false): Promise<string | null> {
@@ -270,33 +302,23 @@ export default class {
       ?? (/"accessToken":"([^"]+)"/.exec(html)?.[1])
       ?? null;
 
-    // Only bother paginating if the playlist likely has more than the embed returned.
-    // Check the total track count from the API first so we know what we're dealing with.
+    // The embed baseline never includes thumbnails, only paginateWithEmbedToken does
+    // (it hits the real tracks API, which returns album art). Always use it when we
+    // have a token, even if the embed already covered every track in the playlist:
+    // skipping it here used to leave every track in short playlists with no artwork.
     const tokenToUse = embedToken ?? await this.getAnonymousToken(BROWSER_UA);
 
     if (tokenToUse) {
       try {
-        const firstPageRaw = await got(
-          `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=1&offset=0`,
-          {headers: {Authorization: `Bearer ${tokenToUse}`}, timeout: {request: 8_000}},
-        ).text();
-        const firstPage = JSON.parse(firstPageRaw) as {total?: number};
-        const totalInPlaylist = firstPage.total ?? 0;
-
-        if (totalInPlaylist > entity.trackList.length) {
-          // Playlist has more songs than the embed returned — paginate the full list
-          const paginated = await this.paginateWithEmbedToken(tokenToUse, playlistId, Math.min(playlistLimit, totalInPlaylist));
-          if (paginated.length > tracks.length) {
-            tracks = paginated;
-          }
-        }
-        // If totalInPlaylist <= embed count, the embed already gave us everything
-      } catch {
-        // Could not check total — attempt pagination anyway as a best-effort
         const paginated = await this.paginateWithEmbedToken(tokenToUse, playlistId, playlistLimit);
-        if (paginated.length > tracks.length) {
+        // Pagination can return early on a partial failure (rate limit outlasting
+        // its retries); only replace the baseline if it covers at least as much
+        // as we already have, so a partial fetch never loses tracks.
+        if (paginated.length >= tracks.length) {
           tracks = paginated;
         }
+      } catch {
+        // Keep the thumbnail-less embed baseline as a last resort.
       }
     }
 
@@ -479,6 +501,29 @@ export default class {
     }
 
     return tracks;
+  }
+
+  private async getSearchToken(): Promise<string | null> {
+    const clientId = this.spotify.getClientId();
+    const clientSecret = this.spotify.getClientSecret();
+    if (clientId && clientSecret) {
+      try {
+        const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const raw = await got('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {Authorization: `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded'},
+          body: 'grant_type=client_credentials',
+          timeout: {request: 10_000},
+        }).text();
+        const token = (JSON.parse(raw) as {access_token?: string}).access_token;
+        if (token) {
+          return token;
+        }
+      } catch { /* fall through to anon */ }
+    }
+
+    const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    return this.getAnonymousToken(BROWSER_UA);
   }
 
   private toSpotifyTrack(track: SpotifyApi.TrackObjectSimplified, thumbnailUrl: string | null = null): SpotifyTrack {

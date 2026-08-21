@@ -245,51 +245,80 @@ export const updateYtDlp = async (): Promise<YtDlpUpdateResult> => {
   };
 };
 
-export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlpMediaSource> => {
-  try {
-    const {stdout} = await execa(getExecutable(), [
-      '--dump-single-json',
-      '--no-playlist',
-      '--skip-download',
-      '--no-warnings',
-      '--no-cache-dir',
-      '-f',
-      'bestaudio/best',
-      '-S',
-      'proto:https',
-      '--extractor-args',
-      'youtube:player_client=android_vr,default,-ios',
-      toYouTubeWatchUrl(videoIdOrUrl),
-    ], {
-      timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
-    });
+// YouTube regularly breaks individual player clients, so try several in order
+// rather than pinning a single one. Overridable via YT_DLP_PLAYER_CLIENTS
+// (comma-separated groups, use "|" to separate attempts) for quick hotfixes
+// without a redeploy.
+const DEFAULT_PLAYER_CLIENT_ATTEMPTS = [
+  'default',
+  'android_vr,default,-ios',
+  'web_safari,default',
+  'tv,default',
+  'ios,default',
+];
 
-    const response = JSON.parse(stdout) as YtDlpResponse;
-    const download = response.requested_downloads?.at(0) ?? response;
+const getPlayerClientAttempts = (): string[] => {
+  const configured = firstNonEmpty(process.env.YT_DLP_PLAYER_CLIENTS);
 
-    if (!download.url) {
-      throw new Error('yt-dlp did not return a playable media URL.');
-    }
-
-    return {
-      url: download.url,
-      headers: normalizeHeaders(download.http_headers ?? response.http_headers),
-      isLive: Boolean(response.is_live ?? (response.live_status === 'is_live')),
-    };
-  } catch (error: unknown) {
-    if (isExecaError(error)) {
-      const detail = (error as {stderr?: string; shortMessage?: string}).stderr?.trim()
-        ?? (error as {shortMessage?: string}).shortMessage
-        ?? 'Unknown yt-dlp error';
-      throw new Error(`yt-dlp failed to extract media: ${detail}`);
-    }
-
-    if (error instanceof SyntaxError) {
-      throw new Error('yt-dlp returned an invalid response.');
-    }
-
-    throw error;
+  if (!configured) {
+    return DEFAULT_PLAYER_CLIENT_ATTEMPTS;
   }
+
+  const attempts = configured.split('|').map(attempt => attempt.trim()).filter(Boolean);
+
+  return attempts.length > 0 ? attempts : DEFAULT_PLAYER_CLIENT_ATTEMPTS;
+};
+
+const extractWithPlayerClient = async (target: string, playerClient: string): Promise<YtDlpMediaSource> => {
+  const {stdout} = await execa(getExecutable(), [
+    '--dump-single-json',
+    '--no-playlist',
+    '--skip-download',
+    '--no-warnings',
+    '--no-cache-dir',
+    '-f',
+    'bestaudio/best',
+    '-S',
+    'proto:https',
+    '--extractor-args',
+    `youtube:player_client=${playerClient}`,
+    target,
+  ], {
+    timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
+  });
+
+  const response = JSON.parse(stdout) as YtDlpResponse;
+  const download = response.requested_downloads?.at(0) ?? response;
+
+  if (!download.url) {
+    throw new Error('yt-dlp did not return a playable media URL.');
+  }
+
+  return {
+    url: download.url,
+    headers: normalizeHeaders(download.http_headers ?? response.http_headers),
+    isLive: Boolean(response.is_live ?? (response.live_status === 'is_live')),
+  };
+};
+
+export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlpMediaSource> => {
+  const target = toYouTubeWatchUrl(videoIdOrUrl);
+  const errors: string[] = [];
+
+  for (const playerClient of getPlayerClientAttempts()) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await extractWithPlayerClient(target, playerClient);
+    } catch (error: unknown) {
+      if (error instanceof SyntaxError) {
+        errors.push(`${playerClient}: yt-dlp returned an invalid response.`);
+      } else {
+        errors.push(`${playerClient}: ${getExecaErrorMessage(error)}`);
+      }
+    }
+  }
+
+  throw new Error(`yt-dlp failed to extract media: ${errors.join(' | ')}`);
 };
 
 export interface YtDlpSearchResult {
@@ -326,19 +355,28 @@ export interface YtDlpPlaylistResult {
   readonly entries: YtDlpPlaylistEntry[];
 }
 
-export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlaylistResult | null> => {
+export const getYouTubePlaylist = async (playlistId: string): Promise<YtDlpPlaylistResult> => {
+  // YouTube's Mix/Radio playlists (RD-prefixed) come back as "This playlist type
+  // is unviewable" when fetched as a standalone playlist; they only resolve via
+  // the watch page of the video they're attached to.
+  const isMix = playlistId.startsWith('RD');
+  const target = isMix
+    ? `https://www.youtube.com/watch?v=${playlistId.slice(2)}&list=${playlistId}`
+    : `https://www.youtube.com/playlist?list=${playlistId}`;
+
   try {
     const {stdout} = await execa(getExecutable(), [
       '--flat-playlist',
+      ...(isMix ? ['--yes-playlist'] : []),
       '--dump-single-json',
       '--no-warnings',
       '--no-cache-dir',
-      `https://www.youtube.com/playlist?list=${playlistId}`,
+      target,
     ], {timeout: 60_000});
 
     return JSON.parse(stdout) as YtDlpPlaylistResult;
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    throw new Error(getExecaErrorMessage(error));
   }
 };
 
@@ -360,6 +398,34 @@ const extractFirstSearchResult = (raw: YtDlpRawSearchResult): YtDlpSearchResult 
     thumbnail: video.thumbnail ?? '',
     is_live: video.is_live ?? false,
   };
+};
+
+export const searchYouTubeMulti = async (query: string, limit: number): Promise<YtDlpSearchResult[]> => {
+  try {
+    const {stdout} = await execa(getExecutable(), [
+      `ytsearch${limit}:${query}`,
+      '--flat-playlist',
+      '--dump-json',
+      '--no-playlist',
+      '--no-warnings',
+      '--no-cache-dir',
+    ], {timeout: YT_DLP_EXTRACT_TIMEOUT_MS});
+
+    return stdout
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((line): YtDlpSearchResult[] => {
+        try {
+          const result = extractFirstSearchResult(JSON.parse(line) as YtDlpRawSearchResult);
+          return result ? [result] : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
 };
 
 export const searchWithYtDlp = async (query: string): Promise<YtDlpSearchResult | null> => {

@@ -19,12 +19,19 @@ import {
   VoiceConnectionStatus,
 } from '@discordjs/voice';
 import FileCacheProvider from './file-cache.js';
+import type GetSongs from './get-songs.js';
 import debug from '../utils/debug.js';
+import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {getYouTubeMediaSource, searchWithYtDlp} from '../utils/yt-dlp.js';
 import {Setting} from '@prisma/client';
 import https from 'https';
+
+// A track that stops this early never actually streamed.
+const MIN_SUCCESSFUL_PLAY_SECONDS = 5;
+// How many duds in a row before giving up instead of chewing through the queue.
+const MAX_CONSECUTIVE_FAILED_SONGS = 3;
 
 export enum MediaSource {
   Youtube,
@@ -82,6 +89,9 @@ export default class {
   public guildId: string;
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
+  // Auto-continue with similar tracks once the queue runs dry, gated on someone
+  // actually being in the voice channel so it never plays to an empty room.
+  public radioAutoEnabled = false;
   // Tracks the last Spotify playlist URL and how many songs were loaded
   // so "Load More from Spotify" can fetch the next batch at the right offset.
   public spotifyPlaylistContext: {url: string; loadedCount: number; lyricVideo?: boolean} | null = null;
@@ -104,6 +114,12 @@ export default class {
   private crossfade = 0;
   private consecutivePlayErrors = 0;
   private thumbnailFetchInProgress = false;
+
+  // A song that goes idle almost immediately never really played — usually a
+  // dead media URL (YouTube throttling/403). Without a circuit breaker each
+  // failure advances the queue, so a bad run silently burns an entire playlist
+  // in seconds. Track consecutive duds and stop instead of racing to the end.
+  private consecutiveFailedSongs = 0;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
   private thumbSweepInterval: NodeJS.Timeout | undefined;
@@ -115,13 +131,18 @@ export default class {
   private pauseDisconnectTimer: NodeJS.Timeout | null = null;
   private emptyChannelTimer: NodeJS.Timeout | null = null;
   private queueClearTimer: NodeJS.Timeout | null = null;
+  private pauseDisconnectsAt: number | null = null;
+  private queueClearsAt: number | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
 
-  constructor(fileCache: FileCacheProvider, guildId: string) {
+  private readonly getSongs: GetSongs;
+
+  constructor(fileCache: FileCacheProvider, guildId: string, getSongs: GetSongs) {
     this.fileCache = fileCache;
     this.guildId = guildId;
+    this.getSongs = getSongs;
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -129,10 +150,11 @@ export default class {
       this.disconnect();
     }
 
-    // Cancel any pending soft-disconnect queue-clear
+    // Cancel any pending queue-clear so reconnecting preserves the queue
     if (this.queueClearTimer) {
       clearTimeout(this.queueClearTimer);
       this.queueClearTimer = null;
+      this.queueClearsAt = null;
     }
 
     // Always get freshest default volume setting value
@@ -183,6 +205,7 @@ export default class {
     if (this.pauseDisconnectTimer) {
       clearTimeout(this.pauseDisconnectTimer);
       this.pauseDisconnectTimer = null;
+      this.pauseDisconnectsAt = null;
     }
 
     if (this.voiceConnection) {
@@ -194,6 +217,7 @@ export default class {
       if (this.pauseDisconnectTimer) {
         clearTimeout(this.pauseDisconnectTimer);
         this.pauseDisconnectTimer = null;
+        this.pauseDisconnectsAt = null;
       }
 
       this.loopCurrentSong = false;
@@ -217,6 +241,22 @@ export default class {
 
     this.extraConnections.clear();
     this.extraChannels.clear();
+
+    // Schedule queue clear 5 minutes after disconnect so the queue is wiped
+    // if the bot does not rejoin. connect() cancels this timer.
+    // softDisconnect() will overwrite it with its own timer immediately after.
+    if (!this.queueClearTimer) {
+      const clearMs = 5 * 60 * 1000;
+      this.queueClearsAt = Date.now() + clearMs;
+      this.queueClearTimer = setTimeout(() => {
+        this.queueClearTimer = null;
+        this.queueClearsAt = null;
+        this.queuePosition = 0;
+        this.queue = [];
+        this.pendingSongs = [];
+        this.spotifyPlaylistContext = null;
+      }, clearMs);
+    }
   }
 
   // Join an additional voice channel and broadcast the same audio to it
@@ -339,6 +379,7 @@ export default class {
       if (this.pauseDisconnectTimer) {
         clearTimeout(this.pauseDisconnectTimer);
         this.pauseDisconnectTimer = null;
+        this.pauseDisconnectsAt = null;
       }
 
       if (this.audioPlayer) {
@@ -429,18 +470,20 @@ export default class {
 
     this.stopTrackingPosition();
 
-    // Disconnect after 10 minutes of being paused
     if (this.pauseDisconnectTimer) {
       clearTimeout(this.pauseDisconnectTimer);
     }
 
+    const pauseMs = 5 * 60 * 1000;
+    this.pauseDisconnectsAt = Date.now() + pauseMs;
     this.pauseDisconnectTimer = setTimeout(() => {
       if (this.status === STATUS.PAUSED) {
         this.disconnect();
       }
 
       this.pauseDisconnectTimer = null;
-    }, 10 * 60 * 1000);
+      this.pauseDisconnectsAt = null;
+    }, pauseMs);
   }
 
   async forward(skip: number): Promise<void> {
@@ -674,11 +717,14 @@ export default class {
       clearTimeout(this.queueClearTimer);
     }
 
+    const clearMs = gracePeriodSeconds * 1000;
+    this.queueClearsAt = Date.now() + clearMs;
     this.queueClearTimer = setTimeout(() => {
       this.queueClearTimer = null;
+      this.queueClearsAt = null;
       this.queuePosition = 0;
       this.queue = [];
-    }, gracePeriodSeconds * 1000);
+    }, clearMs);
   }
 
   /**
@@ -687,13 +733,15 @@ export default class {
    * timeout (secondsToWaitAfterQueueEmpties).
    */
   async clearQueue(): Promise<void> {
-    this.audioPlayer?.stop(true);
+    // Set all state BEFORE stop() so the synchronous Idle event sees IDLE status
+    // and onAudioPlayerIdle skips all queue-advancement logic.
     this.status = STATUS.IDLE;
     this.nowPlaying = null;
     this.positionInSeconds = 0;
     this.queuePosition = 0;
     this.queue = [];
     this.stopTrackingPosition();
+    this.audioPlayer?.stop(true);
 
     // Reset any pending idle disconnect timer and start a fresh one
     if (this.disconnectTimer) {
@@ -751,6 +799,14 @@ export default class {
   getVolume(): number {
     // Only use default volume if player volume is not already set (in the event of a reconnect we shouldn't reset)
     return this.volume ?? this.defaultVolume;
+  }
+
+  getPauseDisconnectsAt(): number | null {
+    return this.pauseDisconnectsAt;
+  }
+
+  getQueueClearsAt(): number | null {
+    return this.queueClearsAt;
   }
 
   setSpeed(speed: number): void {
@@ -985,7 +1041,7 @@ export default class {
       return;
     }
 
-    if (this.audioPlayer.listeners('stateChange').length === 0) {
+    if (this.audioPlayer.listeners(AudioPlayerStatus.Idle).length === 0) {
       this.audioPlayer.on(AudioPlayerStatus.Idle, this.onAudioPlayerIdle.bind(this));
     }
   }
@@ -1050,11 +1106,33 @@ export default class {
       if (currentSong) {
         this.add(currentSong);
       } else {
-        throw new Error('No song currently playing.');
+        return;
       }
     }
 
     if (newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
+      // Distinguish "song finished" from "song never played". Anything that ends
+      // well short of its own length (or within a few seconds when the length is
+      // unknown) is treated as a playback failure.
+      const playedSeconds = this.positionInSeconds;
+      const expectedLength = this.nowPlaying?.length ?? 0;
+      const endedEarly = expectedLength > 0
+        ? playedSeconds < Math.min(MIN_SUCCESSFUL_PLAY_SECONDS, expectedLength / 2)
+        : playedSeconds < MIN_SUCCESSFUL_PLAY_SECONDS;
+
+      if (endedEarly) {
+        this.consecutiveFailedSongs++;
+      } else {
+        this.consecutiveFailedSongs = 0;
+      }
+
+      if (this.consecutiveFailedSongs >= MAX_CONSECUTIVE_FAILED_SONGS) {
+        this.consecutiveFailedSongs = 0;
+        await this.reportPlaybackFailure();
+        await this.finishQueue();
+        return;
+      }
+
       // Top up from pending when fewer than 20 songs remain
       const remaining = this.queue.length - this.queuePosition - 1;
       if (remaining < 20 && this.pendingSongs.length > 0) {
@@ -1083,7 +1161,56 @@ export default class {
     }
   }
 
+  private hasHumanListeners(): boolean {
+    return this.currentChannel ? getSizeWithoutBots(this.currentChannel) > 0 : false;
+  }
+
+  // Appends similar tracks seeded from whatever just finished playing.
+  // Returns whether anything was actually added.
+  private async queueRadio(seed: QueuedSong): Promise<boolean> {
+    try {
+      const songs = await this.getSongs.getRadio(seed.url, 10);
+      if (songs.length === 0) {
+        return false;
+      }
+
+      for (const song of songs) {
+        this.add({...song, addedInChannelId: seed.addedInChannelId, requestedBy: 'radio'});
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Surfaced instead of silently skipping: repeated instant-failures almost always
+  // mean extraction is broken (stale yt-dlp / YouTube change), not bad songs.
+  private async reportPlaybackFailure(): Promise<void> {
+    if (!this.currentChannel) {
+      return;
+    }
+
+    try {
+      await this.currentChannel.send(
+        `⚠️ Stopped after ${MAX_CONSECUTIVE_FAILED_SONGS} tracks failed to play back-to-back. `
+        + 'This usually means YouTube extraction is failing — try updating yt-dlp.',
+      );
+    } catch {
+      // Losing the warning must never break queue teardown.
+    }
+  }
+
   private async finishQueue(): Promise<void> {
+    // Only radio-continue when the queue is genuinely exhausted, not just because
+    // finishQueue() was reached via a paused skip with songs still queued.
+    if (!this.canGoForward(1) && this.radioAutoEnabled && this.nowPlaying && this.hasHumanListeners() && await this.queueRadio(this.nowPlaying)) {
+      // Adding songs only appends; queuePosition still points at the song that just
+      // finished, so advance into the newly added tracks instead of replaying it.
+      await this.forward(1);
+      return;
+    }
+
     this.status = STATUS.IDLE;
     this.audioPlayer?.stop(true);
 
@@ -1125,8 +1252,9 @@ export default class {
       const returnedStream = capacitor.createReadStream();
       let hasReturnedStreamClosed = false;
 
+      const ffmpegInputOptions = options.ffmpegInputOptions ?? [];
       const inputOptions = typeof options.input === 'string'
-        ? (options?.ffmpegInputOptions ?? ['-re'])
+        ? (ffmpegInputOptions.length > 0 ? ffmpegInputOptions : ['-re'])
         : [];
 
       const ffmpegCmd = ffmpeg(options.input)

@@ -3,6 +3,7 @@ import * as spotifyURI from 'spotify-uri';
 import {SongMetadata, QueuedPlaylist, MediaSource} from './player.js';
 import {TYPES} from '../types.js';
 import ffmpeg from 'fluent-ffmpeg';
+import getYouTubeID from 'get-youtube-id';
 import YoutubeAPI from './youtube-api.js';
 import SpotifyAPI, {SpotifyTrack} from './spotify-api.js';
 import {URL} from 'node:url';
@@ -18,6 +19,26 @@ export default class {
   }
 
   async getSongs(query: string, playlistLimit: number, shouldSplitChapters: boolean, lyricVideo = true): Promise<[SongMetadata[], string]> {
+    // Bulk mode: newline-separated list of URLs or search terms
+    const lines = query.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      const results = await Promise.allSettled(
+        lines.map(async line => this.getSongs(line, playlistLimit, shouldSplitChapters, lyricVideo)),
+      );
+      const songs: SongMetadata[] = [];
+      let notFound = 0;
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          songs.push(...r.value[0]);
+        } else {
+          notFound++;
+        }
+      }
+
+      const extraMsg = notFound > 0 ? `${notFound} track${notFound === 1 ? '' : 's'} not found` : '';
+      return [songs, extraMsg];
+    }
+
     const newSongs: SongMetadata[] = [];
     let extraMsg = '';
 
@@ -100,6 +121,18 @@ export default class {
     }
 
     return [newSongs, extraMsg];
+  }
+
+  // Radio: YouTube's own auto-generated Mix for whatever's currently playing.
+  // Seeded from the resolved YouTube video, so this works regardless of whether
+  // the now-playing song originally came from YouTube or was a Spotify import.
+  async getRadio(seedUrl: string, limit = 10): Promise<SongMetadata[]> {
+    const seedVideoId = seedUrl.length === 11 ? seedUrl : getYouTubeID(seedUrl);
+    if (!seedVideoId) {
+      throw new Error('Could not determine a YouTube video to seed radio from.');
+    }
+
+    return this.youtubeAPI.getMix(seedVideoId, limit);
   }
 
   private async youtubeVideoSearch(query: string, shouldSplitChapters: boolean): Promise<SongMetadata[]> {

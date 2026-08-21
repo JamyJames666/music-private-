@@ -224,6 +224,14 @@ export default class {
     return songsToReturn;
   }
 
+  // YouTube's own auto-generated "Mix" for a video (the RD<id> playlist you get
+  // from the "Mix"/"Radio" button on youtube.com). Not exposed by the Data API,
+  // so this always goes through yt-dlp regardless of whether a key is configured.
+  async getMix(seedVideoId: string, limit: number): Promise<SongMetadata[]> {
+    const songs = await this.getPlaylistWithYtDlpFallback(`RD${seedVideoId}`);
+    return songs.filter(song => song.url !== seedVideoId).slice(0, limit).map(song => ({...song, playlist: null}));
+  }
+
   private async searchWithYtDlpFallback(query: string): Promise<SongMetadata[]> {
     const result = await searchWithYtDlp(query);
     if (!result) {
