@@ -17,10 +17,10 @@
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     min-height: 100vh;
     background-image:
-      radial-gradient(ellipse 65% 55% at 8% 0%,   rgba(130, 40, 220, 0.22) 0%, transparent 70%),
-      radial-gradient(ellipse 50% 45% at 92% 5%,  rgba(60, 20, 180, 0.14) 0%, transparent 65%),
-      radial-gradient(ellipse 55% 50% at 95% 100%, rgba(0, 160, 170, 0.13) 0%, transparent 70%),
-      radial-gradient(ellipse 40% 40% at 5% 95%,  rgba(180, 30, 120, 0.10) 0%, transparent 65%);
+      radial-gradient(ellipse 65% 55% at 8% 0%,   rgba(130, 40, 220, 0.30) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 45% at 92% 5%,  rgba(60, 20, 180, 0.20) 0%, transparent 65%),
+      radial-gradient(ellipse 55% 50% at 95% 100%, rgba(0, 160, 170, 0.18) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 40% at 5% 95%,  rgba(180, 30, 120, 0.15) 0%, transparent 65%);
     background-attachment: fixed;
   }
 
@@ -109,8 +109,8 @@
 
 @layer components {
   .card {
-    background: rgba(14, 12, 28, 0.82);
-    border: 1px solid #2e2b45;
+    background: rgba(22, 20, 44, 0.88);
+    border: 1px solid #3d3960;
     border-radius: 1rem;
     box-shadow: 0 4px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
     backdrop-filter: blur(14px);

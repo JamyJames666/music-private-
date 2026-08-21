@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Lock, Upload, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react'
-import { bulkLogin, bulkImport, bulkConfigured, type Channel } from '@/lib/api'
+import { useState } from 'react'
+import { Upload, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react'
+import { bulkImport, type Channel } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -10,7 +10,6 @@ interface Props {
   channelId: string
   onChannelChange: (id: string) => void
   onRefresh: () => void
-  externalBulkToken?: string  // when set, skips the internal login screen
 }
 
 function parseLine(line: string): string | null {
@@ -24,23 +23,9 @@ function parseLine(line: string): string | null {
   return `${titlePart} ${artists}`
 }
 
-export default function BulkImport({ token, guildId, channels, channelId, onChannelChange, onRefresh, externalBulkToken }: Props) {
-  const [password,    setPassword]   = useState('')
-  const [bulkToken,   setBulkToken]  = useState<string | null>(() => externalBulkToken ?? sessionStorage.getItem('bulk_token'))
-  const [loginError,  setLoginError] = useState('')
-  const [loginBusy,   setLoginBusy]  = useState(false)
-  const [serverInfo,  setServerInfo] = useState<{configured: boolean; length: number} | null>(null)
-
-  // Sync external token when it changes (e.g. Dashboard unlocks after mount)
-  useEffect(() => {
-    if (externalBulkToken) setBulkToken(externalBulkToken)
-  }, [externalBulkToken])
-
-  useEffect(() => {
-    if (externalBulkToken) return  // server diagnostic only needed in standalone mode
-    bulkConfigured().then(setServerInfo).catch(() => null)
-  }, [externalBulkToken])
-
+// Rendered only inside the admin panel: reaching this component already proves
+// the session logged in with the admin password, so it just uses the main token.
+export default function BulkImport({ token, guildId, channels, channelId, onChannelChange, onRefresh }: Props) {
   const [text,    setText]    = useState('')
   const [loading, setLoading] = useState(false)
   const [result,  setResult]  = useState<{ ok: boolean; msg: string } | null>(null)
@@ -48,124 +33,29 @@ export default function BulkImport({ token, guildId, channels, channelId, onChan
   const lines   = text.split('\n').filter(l => l.trim())
   const queries = lines.map(parseLine).filter((q): q is string => Boolean(q))
 
-  // ── Login ─────────────────────────────────────────────────────────────────
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!password) return
-    setLoginBusy(true)
-    setLoginError('')
-    try {
-      const { bulkToken: bt } = await bulkLogin(password)
-      setBulkToken(bt)
-      sessionStorage.setItem('bulk_token', bt)
-      setPassword('')
-    } catch (err) {
-      setLoginError(err instanceof Error ? err.message : 'Login failed')
-    } finally {
-      setLoginBusy(false)
-    }
-  }
-
-  const handleLogout = () => {
-    setBulkToken(null)
-    sessionStorage.removeItem('bulk_token')
-  }
-
-  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!bulkToken || queries.length === 0) return
+    if (queries.length === 0) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await bulkImport(token, guildId, queries, channelId, bulkToken)
+      const res = await bulkImport(token, guildId, queries, channelId)
       setResult({ ok: true, msg: `Added ${res.added} song${res.added !== 1 ? 's' : ''} to the queue` })
       setText('')
       onRefresh()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed'
-      if (msg.includes('401') || msg.toLowerCase().includes('token') || msg.toLowerCase().includes('expired')) {
-        if (externalBulkToken) {
-          setResult({ ok: false, msg: 'Session expired — sign out and back in from the admin panel' })
-        } else {
-          handleLogout()
-          setResult({ ok: false, msg: 'Session expired — please log in again' })
-        }
-      } else {
-        setResult({ ok: false, msg })
-      }
+      setResult({ ok: false, msg: err instanceof Error ? err.message : 'Failed' })
     } finally {
       setLoading(false)
     }
   }
 
-  // ── Login screen — only shown in standalone mode (no external token) ────────
-  if (!bulkToken && !externalBulkToken) {
-    return (
-      <div className="max-w-sm mx-auto px-6 py-16 space-y-6">
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"
-            style={{ background: 'rgb(var(--accent-rgb) / 0.15)' }}>
-            <Lock size={20} style={{ color: 'rgb(var(--accent-rgb))' }} />
-          </div>
-          <h1 className="text-lg font-bold text-white">Bulk Import</h1>
-          <p className="text-sm" style={{ color: '#666' }}>Enter the Bulk Import password to continue</p>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-3">
-          <input
-            type="password"
-            className="input w-full"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            autoFocus
-          />
-          {loginError && (
-            <p className="text-xs text-app-danger">{loginError}</p>
-          )}
-          <button
-            type="submit"
-            disabled={loginBusy || !password}
-            className="btn-primary w-full py-2.5"
-          >
-            {loginBusy ? 'Checking…' : 'Unlock'}
-          </button>
-        </form>
-
-        {/* Server diagnostic */}
-        {serverInfo !== null && (
-          <div className="text-xs text-center rounded-lg px-3 py-2"
-            style={{ background: serverInfo.configured ? 'rgba(34,197,94,0.08)' : 'rgba(244,63,94,0.08)',
-                     color: serverInfo.configured ? '#22c55e' : '#f43f5e',
-                     border: `1px solid ${serverInfo.configured ? 'rgba(34,197,94,0.2)' : 'rgba(244,63,94,0.2)'}` }}>
-            {serverInfo.configured
-              ? `✓ Server has BULK_ADD_PASSWORD set (${serverInfo.length} chars)`
-              : '✗ Server does not see BULK_ADD_PASSWORD — restart the bot after adding it to .env'}
-          </div>
-        )}
-
-        <p className="text-xs text-center" style={{ color: '#444' }}>
-          Set <code className="bg-app-panel px-1 rounded">BULK_ADD_PASSWORD</code> in <code className="bg-app-panel px-1 rounded">.env</code> to configure
-        </p>
-      </div>
-    )
-  }
-
-  // ── Import screen ─────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Bulk Import</h1>
-          <p className="text-sm mt-1" style={{ color: '#888' }}>
-            Paste songs one per line — they'll all queue up at once.
-          </p>
-        </div>
-        {!externalBulkToken && (
-          <button onClick={handleLogout} className="text-xs" style={{ color: '#555' }}>
-            Log out
-          </button>
-        )}
+      <div>
+        <h1 className="text-xl font-bold text-white">Bulk Import</h1>
+        <p className="text-sm mt-1" style={{ color: '#888' }}>
+          Paste songs one per line, they'll all queue up at once.
+        </p>
       </div>
 
       {/* Channel selector */}

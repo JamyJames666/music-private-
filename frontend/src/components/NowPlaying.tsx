@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, SkipForward, Square, Music, Repeat, Repeat1, Volume2 } from 'lucide-react'
+import { Play, Pause, SkipForward, Square, Music, Repeat, Repeat1, Volume2, Maximize2 } from 'lucide-react'
 import { pause, resume, skip, stop, setVolume, toggleLoopSong, toggleLoopQueue, type PlayerStatus } from '@/lib/api'
 import { fmtTime, cn } from '@/lib/utils'
 import SourceBadge from './SourceBadge'
@@ -11,9 +11,10 @@ interface Props {
   guildId: string
   onRefresh: () => void
   onPositionChange?: (pos: number) => void
+  onExpand?: () => void
 }
 
-export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange }: Props) {
+export default function NowPlaying({ status, token, guildId, onRefresh, onPositionChange, onExpand }: Props) {
   const playback   = useRef({ pos: 0, len: 0, rate: 1, playing: false, url: '' })
   const barRef     = useRef<HTMLDivElement>(null)
   const elapsedRef = useRef<HTMLSpanElement>(null)
@@ -108,6 +109,22 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
   const isPlaying = optimisticPlaying ?? serverPlaying
   const active    = status?.status === 'PLAYING' || status?.status === 'PAUSED'
   const np        = status?.nowPlaying ?? null
+
+  // Live countdown for pause-disconnect and queue-clear timers
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const hasCountdown = status?.pauseDisconnectsAt || status?.queueClearsAt
+    if (!hasCountdown) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [status?.pauseDisconnectsAt, status?.queueClearsAt])
+
+  const fmtCountdown = (endsAt: number) => {
+    const secs = Math.max(0, Math.round((endsAt - Date.now()) / 1000))
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
   const pb        = playback.current
   const pct       = pb.len > 0 ? Math.min(100, (pb.pos / pb.len) * 100) : 0
 
@@ -182,6 +199,15 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
           </div>
           <p className="text-white font-bold text-xl">Nothing playing</p>
           <p className="text-sm" style={{ color: '#555' }}>Add a song to get started</p>
+          {status?.queueClearsAt && (
+            <div
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+            >
+              <span style={{ fontSize: 10 }}>🗑</span>
+              Queue clears in {fmtCountdown(status.queueClearsAt)}
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -213,6 +239,18 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               <span className="block w-1 rounded-sm animate-bar-2" style={{ background: 'rgba(255,255,255,0.8)' }} />
               <span className="block w-1 rounded-sm animate-bar-3" style={{ background: 'rgba(255,255,255,0.8)' }} />
             </div>
+            {/* Expand to focus mode. Always visible (not hover-only) so it's reachable on touch. */}
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center
+                           transition-all hover:scale-110 active:scale-95"
+                style={{ color: '#fff', background: 'rgba(0,0,0,0.45)' }}
+                title="Expand"
+              >
+                <Maximize2 size={13} />
+              </button>
+            )}
           </div>
 
           {/* Title + artist */}
@@ -225,6 +263,30 @@ export default function NowPlaying({ status, token, guildId, onRefresh, onPositi
               {np?.source && <SourceBadge source={np.source} />}
             </div>
           </div>
+
+          {/* Disconnect / queue-clear countdown pills */}
+          {(status?.pauseDisconnectsAt || status?.queueClearsAt) && (
+            <div className="flex flex-col items-center gap-1 z-10 mt-1 mb-1">
+              {status?.pauseDisconnectsAt && (
+                <div
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}
+                >
+                  <span style={{ fontSize: 10 }}>⏸</span>
+                  Disconnects in {fmtCountdown(status.pauseDisconnectsAt)}
+                </div>
+              )}
+              {status?.queueClearsAt && (
+                <div
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+                >
+                  <span style={{ fontSize: 10 }}>🗑</span>
+                  Queue clears in {fmtCountdown(status.queueClearsAt)}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="w-full z-10 mt-2 mb-3 px-6" style={{ maxWidth: 440 }}>

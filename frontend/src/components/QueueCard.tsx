@@ -18,10 +18,11 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Shuffle, GripVertical, X, Music, Trash2, ListMusic,
-  ChevronsUp, Search, ListPlus, LogOut, SkipForward,
+  ChevronsUp, Search, LogOut, SkipForward, Radio,
 } from 'lucide-react'
-import { shuffle, clearQueue, move, remove, flushPending, disconnect, skip, type TrackInfo } from '@/lib/api'
-import { fmtTime, cn } from '@/lib/utils'
+import { shuffle, clearQueue, move, remove, disconnect, skip, startRadio, toggleRadioAuto, type TrackInfo } from '@/lib/api'
+import { fmtTime, fmtDuration, cn } from '@/lib/utils'
+import { toast } from '@/lib/use-toast'
 // fmtDuration kept for compatibility
 const _fmtDuration = fmtTime; void _fmtDuration
 import SourceBadge from './SourceBadge'
@@ -187,19 +188,21 @@ interface Props {
   token: string
   guildId: string
   onRefresh: () => void
-  pendingCount?: number
   nowPlaying?: TrackInfo | null
   isPlaying?: boolean
   playerStatus?: string
+  hasRadio?: boolean
+  radioAutoEnabled?: boolean
 }
 
 function QueueCard({
-  queue, token, guildId, onRefresh, pendingCount = 0, nowPlaying = null, isPlaying = false, playerStatus,
+  queue, token, guildId, onRefresh, nowPlaying = null, isPlaying = false, playerStatus,
+  hasRadio = false, radioAutoEnabled = false,
 }: Props) {
   const [optimisticQueue, setOptimisticQueue] = useState<TrackInfo[] | null>(null)
   const [search, setSearch]                   = useState('')
   const [page, setPage]                       = useState(0)
-  const [bringingToQueue, setBringingToQueue] = useState(false)
+  const [startingRadio, setStartingRadio]     = useState(false)
 
   const displayQueue = optimisticQueue ?? queue
   // Ref mirror so row callbacks can stay referentially stable (keeps QueueRow memo effective)
@@ -246,9 +249,32 @@ function QueueCard({
     }
   }, [displayQueue, token, guildId, onRefresh])
 
-  const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh() }
+  const handleShuffle      = async () => { await shuffle(token, guildId).catch(() => null); onRefresh(); toast('Queue shuffled') }
   const handleClearQueue   = async () => { await clearQueue(token, guildId).catch(() => null); onRefresh() }
   const handleDisconnect   = async () => { await disconnect(token, guildId).catch(() => null); onRefresh() }
+
+  const handleStartRadio = async () => {
+    setStartingRadio(true)
+    try {
+      const res = await startRadio(token, guildId)
+      toast(`Radio added ${res.added} song${res.added === 1 ? '' : 's'}`)
+      onRefresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start radio')
+    } finally {
+      setStartingRadio(false)
+    }
+  }
+
+  const handleToggleRadioAuto = async () => {
+    try {
+      const res = await toggleRadioAuto(token, guildId)
+      toast(res.radioAutoEnabled ? 'Radio will auto-continue the queue' : 'Radio auto-continue off')
+      onRefresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not update radio auto-continue')
+    }
+  }
 
   const handleRemove = useCallback(async (originalIndex: number) => {
     setOptimisticQueue(displayQueueRef.current.filter((_, i) => i !== originalIndex))
@@ -264,13 +290,6 @@ function QueueCard({
     try { await move(token, guildId, originalIndex + 1, 1) }
     finally { setOptimisticQueue(null); onRefresh() }
   }, [token, guildId, onRefresh])
-
-  const handleBringToQueue = async () => {
-    setBringingToQueue(true)
-    try { await flushPending(token, guildId, 9999); onRefresh() }
-    catch { /* non-fatal */ }
-    finally { setBringingToQueue(false) }
-  }
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -297,51 +316,45 @@ function QueueCard({
           <div className="flex items-center gap-2 mr-auto flex-wrap">
             <span className="text-xs tabular-nums" style={{ color: '#666' }}>
               {displayQueue.length} songs
+              {(() => {
+                const total = displayQueue.reduce((s, t) => s + (t.length ?? 0), 0)
+                const d = fmtDuration(total)
+                return d ? <span className="ml-1">· {d}</span> : null
+              })()}
             </span>
-            {nowPlaying && (() => {
-              const total = 1 + displayQueue.length
-              const pct   = Math.round((1 / total) * 100)
-              return (
-                <span className="text-xs tabular-nums font-medium" style={{ color: '#666' }}>
-                  · 1/{total}
-                  <span className="ml-1.5 font-bold" style={{ color: 'rgb(var(--accent-rgb))' }}>{pct}%</span>
-                </span>
-              )
-            })()}
           </div>
         ) : (
           <span className="mr-auto" />
         )}
 
-        {/* Load Lazy Songs — always visible */}
-        <button
-          onClick={handleBringToQueue}
-          disabled={bringingToQueue || pendingCount === 0}
-          className={cn(
-            'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95',
-            pendingCount > 0 && !bringingToQueue && 'animate-lazy-ready',
-          )}
-          style={pendingCount > 0
-            ? { background: 'rgb(var(--accent-rgb) / 0.20)', color: 'rgb(var(--accent-rgb))', border: '1px solid rgb(var(--accent-rgb) / 0.40)' }
-            : { background: 'transparent', color: '#444', border: '1px solid #333', cursor: 'default' }
-          }
-          title={pendingCount > 0 ? `Load ${pendingCount} more songs into queue` : 'No lazy songs waiting'}
-        >
-          <ListPlus size={12} />
-          {bringingToQueue ? 'Loading…' : pendingCount > 0 ? `Load Lazy Songs (${pendingCount})` : 'Load Lazy Songs'}
-        </button>
-
+        {hasRadio && (
+          <>
+            <button
+              className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+              onClick={() => void handleStartRadio()}
+              disabled={!nowPlaying || startingRadio}
+              title="Queue similar tracks now, seeded from what's playing"
+            >
+              <Radio size={12} /> {startingRadio ? 'Starting…' : 'Start Radio'}
+            </button>
+            <button
+              onClick={() => void handleToggleRadioAuto()}
+              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg border transition-all"
+              title={radioAutoEnabled ? 'Auto-continue with radio: on' : 'Auto-continue with radio: off'}
+              style={radioAutoEnabled
+                ? { background: 'rgb(var(--accent-rgb) / 0.15)', color: 'rgb(var(--accent-rgb))', borderColor: 'rgb(var(--accent-rgb) / 0.4)' }
+                : { background: 'transparent', color: '#666', borderColor: '#333' }}
+            >
+              Auto
+            </button>
+          </>
+        )}
         <button
           className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5"
           onClick={handleShuffle}
           disabled={displayQueue.length < 2}
         >
           <Shuffle size={12} /> Shuffle
-          {pendingCount > 0 && (
-            <span className="text-[10px] opacity-60" title={`Shuffles ${displayQueue.length} active + ${pendingCount} pending = ${displayQueue.length + pendingCount} total`}>
-              ({displayQueue.length + pendingCount})
-            </span>
-          )}
         </button>
         <button
           className="btn-ghost flex items-center gap-1.5 text-xs px-2.5 py-1.5 hover:text-app-danger"
