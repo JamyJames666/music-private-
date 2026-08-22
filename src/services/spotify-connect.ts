@@ -20,7 +20,14 @@ export interface SpotifyConnectOptions {
   readonly bitrate: 96 | 160 | 320;
   readonly cacheDir?: string;
   readonly initialVolume: number;
+  readonly oauthPort: number;
 }
+
+// Librespot's OAuth redirect lands on 127.0.0.1 relative to librespot itself,
+// which on a remote host means the callback has to be tunnelled back to the
+// browser doing the sign-in. Keeping the port fixed and configurable is what
+// makes that tunnel possible.
+export const DEFAULT_OAUTH_PORT = 5588;
 
 export const getExecutable = () => process.env.LIBRESPOT_PATH?.trim() ?? 'librespot';
 
@@ -33,6 +40,7 @@ export const getSpotifyConnectOptions = (): SpotifyConnectOptions => ({
     : 320) as 96 | 160 | 320,
   cacheDir: process.env.SPOTIFY_CONNECT_CACHE_DIR?.trim() ?? (process.env.DATA_DIR ? `${process.env.DATA_DIR}/librespot` : undefined),
   initialVolume: 100,
+  oauthPort: Number(process.env.SPOTIFY_CONNECT_OAUTH_PORT) || DEFAULT_OAUTH_PORT,
 });
 
 /**
@@ -85,7 +93,9 @@ export default class SpotifyConnect extends EventEmitter {
     }
 
     if (process.env.SPOTIFY_CONNECT_ENABLE_OAUTH === 'true') {
-      args.push('--enable-oauth');
+      // Required wherever mDNS cannot reach the host (cloud, or Docker Desktop
+      // on Windows/macOS, where host networking is still inside a VM).
+      args.push('--enable-oauth', '--oauth-port', options.oauthPort.toString());
     }
 
     const child = spawn(getExecutable(), args, {stdio: ['ignore', 'pipe', 'pipe']});

@@ -20,12 +20,20 @@ services:
       - SPOTIFY_CONNECT_DEVICE_NAME=${SPOTIFY_CONNECT_DEVICE_NAME}
       - SPOTIFY_CONNECT_BITRATE=${SPOTIFY_CONNECT_BITRATE}
       - SPOTIFY_CONNECT_ENABLE_OAUTH=${SPOTIFY_CONNECT_ENABLE_OAUTH}
+      - SPOTIFY_CONNECT_OAUTH_PORT=5588
     expose:
       - "4000"
-    # Spotify discovers Connect devices over mDNS, which does not cross Docker's
-    # bridge network. Without host networking the device will never appear in
-    # your app — use SPOTIFY_CONNECT_ENABLE_OAUTH=true instead if you cannot
-    # use host mode.
+    ports:
+      # librespot's OAuth redirect server. Bound to loopback because it is only
+      # ever reached through an SSH tunnel from the machine running the browser:
+      #   ssh -L 5588:localhost:5588 you@your-server
+      # Only needed while signing in for the first time; credentials are cached
+      # to /data afterwards.
+      - "127.0.0.1:5588:5588"
+    # Spotify also discovers Connect devices over mDNS, but that never crosses
+    # Docker's bridge network — and on a cloud host it cannot reach your phone
+    # at all. Host networking only helps on a Linux box on the same LAN; use
+    # SPOTIFY_CONNECT_ENABLE_OAUTH=true anywhere else.
     # network_mode: host
     volumes:
       - muse-data:/data
