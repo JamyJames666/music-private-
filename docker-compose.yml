@@ -14,8 +14,19 @@ services:
       - DISABLE_WEB_ANNOUNCEMENTS=${DISABLE_WEB_ANNOUNCEMENTS}
       - WEB_ONLY_MODE=${WEB_ONLY_MODE}
       - ADMIN_ONLY=${ADMIN_ONLY}
+      # Spotify Connect (librespot). Muse appears as a speaker in your Spotify
+      # device list. Requires Spotify Premium.
+      - SPOTIFY_CONNECT_ENABLED=${SPOTIFY_CONNECT_ENABLED}
+      - SPOTIFY_CONNECT_DEVICE_NAME=${SPOTIFY_CONNECT_DEVICE_NAME}
+      - SPOTIFY_CONNECT_BITRATE=${SPOTIFY_CONNECT_BITRATE}
+      - SPOTIFY_CONNECT_ENABLE_OAUTH=${SPOTIFY_CONNECT_ENABLE_OAUTH}
     expose:
       - "4000"
+    # Spotify discovers Connect devices over mDNS, which does not cross Docker's
+    # bridge network. Without host networking the device will never appear in
+    # your app — use SPOTIFY_CONNECT_ENABLE_OAUTH=true instead if you cannot
+    # use host mode.
+    # network_mode: host
     volumes:
       - muse-data:/data
 

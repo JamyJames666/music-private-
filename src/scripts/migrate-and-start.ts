@@ -1,5 +1,6 @@
 // This script applies Prisma migrations
 // and then starts Muse.
+import 'dotenv/config.js';
 import {execa, ExecaError} from 'execa';
 import {promises as fs} from 'fs';
 import Prisma from '@prisma/client';

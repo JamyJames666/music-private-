@@ -25,6 +25,11 @@ import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {getYouTubeMediaSource, searchWithYtDlp} from '../utils/yt-dlp.js';
+import SpotifyConnect, {
+  getSpotifyConnectOptions,
+  isSpotifyConnectEnabled,
+  LIBRESPOT_FFMPEG_INPUT_OPTIONS,
+} from './spotify-connect.js';
 import {Setting} from '@prisma/client';
 import https from 'https';
 
@@ -120,6 +125,10 @@ export default class {
   // failure advances the queue, so a bad run silently burns an entire playlist
   // in seconds. Track consecutive duds and stop instead of racing to the end.
   private consecutiveFailedSongs = 0;
+
+  // Set while the bot is acting as a Spotify Connect speaker. Spotify owns
+  // playback in that mode, so the queue must keep its hands off.
+  private spotifyConnect: SpotifyConnect | null = null;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
   private thumbSweepInterval: NodeJS.Timeout | undefined;
@@ -499,6 +508,92 @@ export default class {
       this.queuePosition--;
       throw error;
     }
+  }
+
+  get isSpotifyConnectActive(): boolean {
+    return this.spotifyConnect !== null;
+  }
+
+  /**
+   * Hands playback over to Spotify: the bot stops being a queue and becomes a
+   * Spotify Connect speaker that shows up in the user's device list.
+   */
+  async startSpotifyConnect(): Promise<void> {
+    if (!isSpotifyConnectEnabled()) {
+      throw new Error('Spotify Connect is disabled. Set SPOTIFY_CONNECT_ENABLED=true to use it.');
+    }
+
+    if (this.spotifyConnect) {
+      throw new Error('Spotify Connect is already running.');
+    }
+
+    const voiceConnection = await this.ensureVoiceConnectionReady();
+
+    // Tear down queue playback first so the two never fight over the connection.
+    this.audioPlayer?.removeAllListeners();
+    this.audioPlayer?.stop(true);
+    this.stopTrackingPosition();
+    this.nowPlaying = null;
+
+    const connect = new SpotifyConnect();
+    this.spotifyConnect = connect;
+
+    connect.on('log', (line: string) => {
+      // Carries the first-run OAuth link, so it must not be swallowed.
+      debug(`librespot: ${line}`);
+    });
+
+    const handleTermination = () => {
+      if (this.spotifyConnect === connect) {
+        this.spotifyConnect = null;
+        this.status = STATUS.IDLE;
+      }
+    };
+
+    connect.on('exit', handleTermination);
+    connect.on('error', handleTermination);
+
+    try {
+      const pcm = connect.start(getSpotifyConnectOptions());
+
+      const stream = await this.createReadStream({
+        input: pcm,
+        cacheKey: 'spotify-connect',
+        ffmpegInputOptions: [...LIBRESPOT_FFMPEG_INPUT_OPTIONS],
+      });
+
+      this.audioPlayer = createAudioPlayer({
+        behaviors: {
+          // Pausing on the phone starves the pipe. The default would call that
+          // a dead stream within a second and stop; this rides out long gaps
+          // instead. Process exit is what signals a genuine failure here.
+          maxMissedFrames: 10_000,
+        },
+      });
+
+      voiceConnection.subscribe(this.audioPlayer);
+      for (const conn of this.extraConnections.values()) {
+        conn.subscribe(this.audioPlayer);
+      }
+
+      this.playAudioPlayerResource(this.createAudioStream(stream));
+      this.status = STATUS.PLAYING;
+    } catch (error: unknown) {
+      connect.stop();
+      this.spotifyConnect = null;
+      throw error;
+    }
+  }
+
+  stopSpotifyConnect(): void {
+    if (!this.spotifyConnect) {
+      return;
+    }
+
+    this.spotifyConnect.stop();
+    this.spotifyConnect = null;
+    this.audioPlayer?.stop(true);
+    this.status = STATUS.IDLE;
   }
 
   registerVoiceActivityListener(guildSettings: Setting) {
@@ -1093,6 +1188,12 @@ export default class {
   }
 
   private async onAudioPlayerIdle(_oldState: AudioPlayerState, newState: AudioPlayerState): Promise<void> {
+    // In Spotify Connect mode there is no queue to advance — a gap just means
+    // Spotify is paused or between tracks.
+    if (this.spotifyConnect) {
+      return;
+    }
+
     // Automatically advance queued song at end
     if (this.loopCurrentSong && newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
       await this.seek(0);
@@ -1114,13 +1215,7 @@ export default class {
       // Distinguish "song finished" from "song never played". Anything that ends
       // well short of its own length (or within a few seconds when the length is
       // unknown) is treated as a playback failure.
-      const playedSeconds = this.positionInSeconds;
-      const expectedLength = this.nowPlaying?.length ?? 0;
-      const endedEarly = expectedLength > 0
-        ? playedSeconds < Math.min(MIN_SUCCESSFUL_PLAY_SECONDS, expectedLength / 2)
-        : playedSeconds < MIN_SUCCESSFUL_PLAY_SECONDS;
-
-      if (endedEarly) {
+      if (this.endedTooEarly()) {
         this.consecutiveFailedSongs++;
       } else {
         this.consecutiveFailedSongs = 0;
@@ -1159,6 +1254,19 @@ export default class {
         });
       }
     }
+  }
+
+  // True when the current track stopped so far short of its own length that it
+  // cannot have actually streamed.
+  private endedTooEarly(): boolean {
+    const playedSeconds = this.positionInSeconds;
+    const expectedLength = this.nowPlaying?.length ?? 0;
+
+    if (expectedLength > 0) {
+      return playedSeconds < Math.min(MIN_SUCCESSFUL_PLAY_SECONDS, expectedLength / 2);
+    }
+
+    return playedSeconds < MIN_SUCCESSFUL_PLAY_SECONDS;
   }
 
   private hasHumanListeners(): boolean {
@@ -1253,9 +1361,9 @@ export default class {
       let hasReturnedStreamClosed = false;
 
       const ffmpegInputOptions = options.ffmpegInputOptions ?? [];
-      const inputOptions = typeof options.input === 'string'
-        ? (ffmpegInputOptions.length > 0 ? ffmpegInputOptions : ['-re'])
-        : [];
+      const inputOptions = ffmpegInputOptions.length > 0
+        ? ffmpegInputOptions
+        : (typeof options.input === 'string' ? ['-re'] : []);
 
       const ffmpegCmd = ffmpeg(options.input)
         .inputOptions(inputOptions)

@@ -19,6 +19,7 @@ import Command from './commands/index.js';
 import Clear from './commands/clear.js';
 import Config from './commands/config.js';
 import Disconnect from './commands/disconnect.js';
+import SpotifyConnectCommand from './commands/spotify-connect.js';
 import Favorites from './commands/favorites.js';
 import ForwardSeek from './commands/fseek.js';
 import LoopQueue from './commands/loop-queue.js';
@@ -78,6 +79,7 @@ if (config.SPOTIFY_CLIENT_ID !== '' && config.SPOTIFY_CLIENT_SECRET !== '') {
   Clear,
   Config,
   Disconnect,
+  SpotifyConnectCommand,
   Favorites,
   ForwardSeek,
   LoopQueue,

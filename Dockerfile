@@ -1,3 +1,11 @@
+# librespot: builds the Spotify Connect client that lets the bot appear as a
+# playback device. --no-default-features drops the host audio backends (alsa,
+# rodio, ...) we have no use for in a container; the pipe backend we do use is
+# always compiled in, so this keeps the build free of audio system deps.
+FROM rust:1-bookworm AS librespot-builder
+
+RUN apt-get update     && apt-get install --no-install-recommends -y pkg-config libssl-dev     && cargo install librespot --version 0.6.0 --no-default-features --locked --root /opt/librespot     && rm -rf /usr/local/cargo/registry
+
 FROM node:22-bookworm-slim AS base
 
 ARG YT_DLP_VERSION=
@@ -59,6 +67,8 @@ RUN yarn build
 FROM base AS runner
 
 WORKDIR /usr/app
+
+COPY --from=librespot-builder /opt/librespot/bin/librespot /usr/local/bin/librespot
 
 COPY --from=builder /usr/app/dist ./dist
 COPY --from=dependencies /usr/app/prod_node_modules node_modules
