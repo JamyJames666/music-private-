@@ -4,7 +4,17 @@
 # always compiled in, so this keeps the build free of audio system deps.
 FROM rust:1-bookworm AS librespot-builder
 
-RUN apt-get update     && apt-get install --no-install-recommends -y pkg-config libssl-dev     && cargo install librespot --version 0.6.0 --no-default-features --locked --root /opt/librespot     && rm -rf /usr/local/cargo/registry
+# 0.6.0 authenticates fine but Spotify no longer serves it a playable audio
+# format — every track fails with "no alternatives found" — so 0.8.0 is
+# required. --no-default-features drops the host audio backends, but the TLS
+# feature librespot-oauth needs must then be re-enabled explicitly, otherwise
+# the build fails with a compile_error!.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y pkg-config libssl-dev \
+    && cargo install librespot --version 0.8.0 --locked \
+    --no-default-features --features rustls-tls-native-roots \
+    --root /opt/librespot \
+    && rm -rf /usr/local/cargo/registry
 
 FROM node:22-bookworm-slim AS base
 
