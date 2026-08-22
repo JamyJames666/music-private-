@@ -539,19 +539,30 @@ export default class {
     this.spotifyConnect = connect;
 
     connect.on('log', (line: string) => {
-      // Carries the first-run OAuth link, so it must not be swallowed.
-      debug(`librespot: ${line}`);
+      // Always printed, not sent through debug(): these lines carry the
+      // first-run OAuth URL and the reason discovery or login failed, and
+      // debug() is silent unless DEBUG=muse is set. librespot is not chatty
+      // enough for this to be noisy.
+      console.log(`[librespot] ${line}`);
     });
 
-    const handleTermination = () => {
+    const handleTermination = (reason: unknown) => {
+      // Silent death here looks identical to "device never appeared", so say so.
+      console.log(`[librespot] stopped: ${String(reason)}`);
+
       if (this.spotifyConnect === connect) {
         this.spotifyConnect = null;
         this.status = STATUS.IDLE;
       }
     };
 
-    connect.on('exit', handleTermination);
-    connect.on('error', handleTermination);
+    connect.on('exit', (code: number | null, signal: string | null) => {
+      handleTermination(`exit code ${String(code)}${signal ? ` (signal ${signal})` : ''}`);
+    });
+    connect.on('error', (error: Error) => {
+      // Most commonly ENOENT: the librespot binary is not in the image.
+      handleTermination(error.message);
+    });
 
     try {
       const pcm = connect.start(getSpotifyConnectOptions());
