@@ -135,6 +135,7 @@ export default class {
 
   private spotifyConnectAuth: SpotifyConnectAuth | null = null;
   private pendingAuthUrl: string | null = null;
+  private spotifyConnectAudioCheck: NodeJS.Timeout | null = null;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
   private thumbSweepInterval: NodeJS.Timeout | undefined;
@@ -606,6 +607,16 @@ export default class {
       throw new Error(`SPOTIFY_AUTH_REQUIRED:${url}`);
     }
 
+    // The sign-in process is a full Connect device with the same name, and its
+    // stdout is parsed as text rather than piped to ffmpeg. Leaving it running
+    // means Spotify can attach to it instead — the device connects, playback
+    // looks fine in the app, and no audio ever reaches Discord.
+    if (this.spotifyConnectAuth) {
+      this.spotifyConnectAuth.stop();
+      this.spotifyConnectAuth = null;
+      this.pendingAuthUrl = null;
+    }
+
     const voiceConnection = await this.ensureVoiceConnectionReady();
 
     // Tear down queue playback first so the two never fight over the connection.
@@ -646,6 +657,24 @@ export default class {
     try {
       const pcm = connect.start(getSpotifyConnectOptions());
 
+      // Distinguishes "Spotify never sent audio" from "audio arrived but died
+      // downstream in ffmpeg or Discord" — otherwise both look like silence.
+      let hasLoggedFirstAudio = false;
+      let bytesFromLibrespot = 0;
+      pcm.on('data', (chunk: Buffer) => {
+        bytesFromLibrespot += chunk.length;
+        if (!hasLoggedFirstAudio) {
+          hasLoggedFirstAudio = true;
+          console.log('[librespot] receiving audio from Spotify');
+        }
+      });
+
+      this.spotifyConnectAudioCheck = setTimeout(() => {
+        if (bytesFromLibrespot === 0) {
+          console.log('[librespot] no audio after 30s — is Muse selected as the device in Spotify, and is something playing?');
+        }
+      }, 30_000);
+
       const stream = await this.createReadStream({
         input: pcm,
         cacheKey: 'spotify-connect',
@@ -676,6 +705,11 @@ export default class {
   }
 
   stopSpotifyConnect(): void {
+    if (this.spotifyConnectAudioCheck) {
+      clearTimeout(this.spotifyConnectAudioCheck);
+      this.spotifyConnectAudioCheck = null;
+    }
+
     if (!this.spotifyConnect) {
       return;
     }
