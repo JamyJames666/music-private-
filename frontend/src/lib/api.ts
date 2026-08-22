@@ -163,6 +163,19 @@ export const getWebOnlyMode = (t: string, guildId: string) =>
 export const setWebOnlyMode = (t: string, guildId: string, enabled: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/web-only-mode`, t, {enabled})
 
+export interface SpotifyConnectState {
+  enabled:    boolean
+  active:     boolean
+  deviceName: string
+}
+
+export const getSpotifyConnect = (t: string, guildId: string) =>
+  req<SpotifyConnectState>('GET', `/api/guilds/${guildId}/spotify-connect`, t)
+export const setSpotifyConnect = (t: string, guildId: string, active: boolean, channelId?: string) =>
+  req<{ok: boolean; active: boolean; deviceName?: string}>(
+    'POST', `/api/guilds/${guildId}/spotify-connect`, t, {active, channelId},
+  )
+
 export const getAdminOnly = (t: string, guildId: string) =>
   req<{enabled: boolean}>('GET', `/api/guilds/${guildId}/settings/admin-only`, t)
 export const setAdminOnly = (t: string, guildId: string, enabled: boolean) =>

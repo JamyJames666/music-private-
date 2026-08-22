@@ -13,6 +13,8 @@ import SpotifyApi from './spotify-api.js';
 import {STATUS, type AudioEffect, AUDIO_EFFECT_FILTERS} from './player.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {prisma} from '../utils/db.js';
+import {getSizeWithoutBots} from '../utils/channels.js';
+import {getSpotifyConnectOptions, isSpotifyConnectEnabled} from './spotify-connect.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -662,6 +664,58 @@ export default class WebServer {
       try {
         this.playerManager.get(req.params.guildId).softDisconnect();
         res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
+    });
+
+    this.app.get('/api/guilds/:guildId/spotify-connect', auth, (req: express.Request, res: express.Response) => {
+      const player = this.playerManager.get(req.params.guildId);
+      res.json({
+        enabled: isSpotifyConnectEnabled(),
+        active: player.isSpotifyConnectActive,
+        deviceName: getSpotifyConnectOptions().deviceName,
+      });
+    });
+
+    this.app.post('/api/guilds/:guildId/spotify-connect', auth, async (req: express.Request, res: express.Response) => {
+      const {active, channelId} = req.body as {active?: boolean; channelId?: string};
+
+      try {
+        const player = this.playerManager.get(req.params.guildId);
+
+        if (!active) {
+          player.stopSpotifyConnect();
+          this.broadcastUpdate(req.params.guildId);
+          res.json({ok: true, active: false});
+          return;
+        }
+
+        // Librespot streams into a live voice connection, so the bot has to be
+        // in a channel before it can start.
+        if (!player.voiceConnection) {
+          const guild = this.client.guilds.cache.get(req.params.guildId);
+          // Prefer a channel that already has people in it, so the toggle does
+          // something sensible when no channelId is supplied.
+          const fallbackChannelId = guild?.channels.cache
+            .find(c => c.type === ChannelType.GuildVoice && getSizeWithoutBots(c) > 0)?.id
+            ?? guild?.channels.cache.find(c => c.type === ChannelType.GuildVoice)?.id;
+          const targetChannelId = channelId ?? fallbackChannelId;
+          const channel = targetChannelId
+            ? guild?.channels.cache.get(targetChannelId) as VoiceChannel | undefined
+            : undefined;
+
+          if (!channel || channel.type !== ChannelType.GuildVoice) {
+            res.status(400).json({error: 'Join a voice channel first, or pass channelId'});
+            return;
+          }
+
+          await player.connect(channel);
+        }
+
+        await player.startSpotifyConnect();
+        this.broadcastUpdate(req.params.guildId);
+        res.json({ok: true, active: true, deviceName: getSpotifyConnectOptions().deviceName});
       } catch (e: unknown) {
         res.status(400).json({error: (e as Error).message});
       }

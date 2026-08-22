@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Settings, Check, Users, Globe, ShieldOff } from 'lucide-react'
+import { ChevronDown, Settings, Check, Users, Globe, ShieldOff, Radio } from 'lucide-react'
 import {
   getTextChannels,
   getAnnouncementChannel,
@@ -10,6 +10,8 @@ import {
   setWebOnlyMode,
   getAdminOnly,
   setAdminOnly,
+  getSpotifyConnect,
+  setSpotifyConnect,
   type Channel,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -72,22 +74,32 @@ export default function BotSettings({ token, guildId }: Props) {
   const [aoSaving,    setAoSaving]         = useState(false)
   const [aoSaved,     setAoSaved]          = useState(false)
 
+  const [scEnabled,    setScEnabled]    = useState(false)
+  const [scActive,     setScActive]     = useState(false)
+  const [scDeviceName, setScDeviceName] = useState('Muse')
+  const [scSaving,     setScSaving]     = useState(false)
+  const [scError,      setScError]      = useState<string | null>(null)
+
   const load = useCallback(async () => {
     if (!guildId) return
     setLoading(true)
     try {
-      const [chs, setting, sr, wom, ao] = await Promise.all([
+      const [chs, setting, sr, wom, ao, sc] = await Promise.all([
         getTextChannels(token, guildId),
         getAnnouncementChannel(token, guildId),
         getSongRequestSetting(token, guildId).catch(() => ({ open: true })),
         getWebOnlyMode(token, guildId).catch(() => ({ enabled: false })),
         getAdminOnly(token, guildId).catch(() => ({ enabled: false })),
+        getSpotifyConnect(token, guildId).catch(() => ({ enabled: false, active: false, deviceName: 'Muse' })),
       ])
       setChannels(chs)
       setCurrent(setting.announcementChannelId)
       setSongRequestsOpen(sr.open)
       setWebOnlyModeState(wom.enabled)
       setAdminOnlyState(ao.enabled)
+      setScEnabled(sc.enabled)
+      setScActive(sc.active)
+      setScDeviceName(sc.deviceName)
     } catch {
       /* non-fatal */
     } finally {
@@ -110,6 +122,23 @@ export default function BotSettings({ token, guildId }: Props) {
       /* best-effort */
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSpotifyConnect = async (active: boolean) => {
+    setScSaving(true)
+    setScError(null)
+    try {
+      const res = await setSpotifyConnect(token, guildId, active)
+      setScActive(res.active)
+      if (res.deviceName) setScDeviceName(res.deviceName)
+    } catch (e) {
+      // Starting can legitimately fail (bot not in voice, librespot missing),
+      // so surface it rather than silently snapping the toggle back.
+      setScError(e instanceof Error ? e.message : 'Could not change Spotify Connect')
+      setScActive(!active)
+    } finally {
+      setScSaving(false)
     }
   }
 
@@ -259,6 +288,31 @@ export default function BotSettings({ token, guildId }: Props) {
       </div>
 
       <div className="border-t border-app-border" />
+
+      {/* Spotify Connect — hidden entirely unless the server has it enabled */}
+      {scEnabled && (
+        <>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <Radio size={13} className="flex-shrink-0 text-app-muted" />
+              <div>
+                <p className="text-sm text-app-text">Spotify Connect</p>
+                <p className="text-xs text-app-border">
+                  {scActive
+                    ? `Live — pick "${scDeviceName}" in your Spotify app. The queue is bypassed while this is on.`
+                    : 'Turn on to control playback from Spotify itself. Requires Premium.'}
+                </p>
+                {scError && <p className="text-xs text-red-400 mt-0.5">{scError}</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Toggle checked={scActive} onChange={handleSpotifyConnect} disabled={scSaving} />
+            </div>
+          </div>
+
+          <div className="border-t border-app-border" />
+        </>
+      )}
 
       {/* Admin-only mode */}
       <div className="flex items-center justify-between gap-4">

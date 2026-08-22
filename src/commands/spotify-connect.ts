@@ -1,10 +1,11 @@
-import {ChatInputCommandInteraction} from 'discord.js';
+import {ChatInputCommandInteraction, GuildMember} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {TYPES} from '../types.js';
 import {inject, injectable} from 'inversify';
 import PlayerManager from '../managers/player.js';
 import Command from './index.js';
 import {getSpotifyConnectOptions, isSpotifyConnectEnabled} from '../services/spotify-connect.js';
+import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
 
 @injectable()
 export default class implements Command {
@@ -48,6 +49,16 @@ export default class implements Command {
     }
 
     await interaction.deferReply();
+
+    // RequiresVC only asserts that the *caller* is in voice — the bot still has
+    // to join before there is a connection to stream into.
+    if (!player.voiceConnection) {
+      const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember)
+        ?? getMostPopularVoiceChannel(interaction.guild!);
+
+      await player.connect(targetVoiceChannel);
+    }
+
     await player.startSpotifyConnect();
 
     const {deviceName} = getSpotifyConnectOptions();
