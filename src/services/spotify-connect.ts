@@ -1,6 +1,9 @@
 import {spawn, ChildProcessByStdio} from 'child_process';
 import {EventEmitter} from 'events';
 import {Readable} from 'stream';
+import {promises as fs} from 'fs';
+import http from 'http';
+import path from 'path';
 
 // Librespot's pipe backend always emits raw interleaved PCM at CD quality.
 // ffmpeg cannot infer any of this from a pipe, so it has to be declared.
@@ -30,6 +33,79 @@ export interface SpotifyConnectOptions {
 export const DEFAULT_OAUTH_PORT = 5588;
 
 export const getExecutable = () => process.env.LIBRESPOT_PATH?.trim() ?? 'librespot';
+
+// Sign-in is done by a throwaway process rather than the streaming one, because
+// librespot prints the auth URL to stdout — the same stdout the pipe backend
+// fills with raw audio. Sharing them means the URL is swallowed into ffmpeg and
+// never seen. Once this process caches credentials, playback starts normally
+// and never needs the OAuth flow again.
+const AUTH_URL_PREFIX = 'Browse to: ';
+
+export const getCredentialsPath = (cacheDir: string) => path.join(cacheDir, 'credentials.json');
+
+export const hasCachedCredentials = async (cacheDir?: string): Promise<boolean> => {
+  if (!cacheDir) {
+    return false;
+  }
+
+  try {
+    await fs.access(getCredentialsPath(cacheDir));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Hands a sign-in code to librespot's OAuth server.
+ *
+ * Spotify only ever redirects to 127.0.0.1, which is meaningless in the
+ * browser doing the sign-in when the bot runs on a remote host. Because this
+ * runs inside the same container as librespot, it can complete the redirect
+ * that the browser could not.
+ */
+export const deliverOAuthCode = async (rawUrlOrCode: string, oauthPort: number): Promise<void> => {
+  const query = buildOAuthQuery(rawUrlOrCode);
+
+  return new Promise((resolve, reject) => {
+    const request = http.get({
+      host: '127.0.0.1',
+      port: oauthPort,
+      path: `/login${query}`,
+      timeout: 10_000,
+    }, response => {
+      response.resume();
+      if (response.statusCode && response.statusCode >= 400) {
+        reject(new Error(`librespot rejected the sign-in code (HTTP ${response.statusCode}).`));
+        return;
+      }
+
+      resolve();
+    });
+
+    request.on('timeout', () => {
+      request.destroy();
+      reject(new Error('librespot did not respond — is Spotify Connect still starting?'));
+    });
+
+    request.on('error', () => {
+      reject(new Error('Could not reach librespot. Turn Spotify Connect on and try again.'));
+    });
+  });
+};
+
+// Accepts either the whole redirected URL or a bare code, since people
+// reasonably paste either.
+const buildOAuthQuery = (rawUrlOrCode: string): string => {
+  const trimmed = rawUrlOrCode.trim();
+
+  const queryIndex = trimmed.indexOf('?');
+  if (queryIndex !== -1) {
+    return trimmed.slice(queryIndex);
+  }
+
+  return `?code=${encodeURIComponent(trimmed)}`;
+};
 
 export const isSpotifyConnectEnabled = () => process.env.SPOTIFY_CONNECT_ENABLED === 'true';
 
@@ -92,11 +168,10 @@ export default class SpotifyConnect extends EventEmitter {
       args.push('--cache', options.cacheDir, '--disable-audio-cache');
     }
 
-    if (process.env.SPOTIFY_CONNECT_ENABLE_OAUTH === 'true') {
-      // Required wherever mDNS cannot reach the host (cloud, or Docker Desktop
-      // on Windows/macOS, where host networking is still inside a VM).
-      args.push('--enable-oauth', '--oauth-port', options.oauthPort.toString());
-    }
+    // Deliberately no --enable-oauth here. This process's stdout is the audio
+    // pipe, and librespot prints the sign-in URL to stdout — enabling OAuth
+    // would inject that text into the PCM stream. SpotifyConnectAuth handles
+    // sign-in separately and caches credentials for this process to reuse.
 
     const child = spawn(getExecutable(), args, {stdio: ['ignore', 'pipe', 'pipe']});
     this.process = child;
@@ -105,8 +180,6 @@ export default class SpotifyConnect extends EventEmitter {
     child.stderr.on('data', (chunk: Buffer) => {
       const line = chunk.toString().trim();
       if (line) {
-        // Librespot reports the OAuth URL and connection state on stderr, so
-        // this is the only place a first-time setup link will appear.
         this.emit('log', line);
       }
     });
@@ -132,6 +205,83 @@ export default class SpotifyConnect extends EventEmitter {
     }
 
     this.stopping = true;
+    this.process.kill('SIGTERM');
+    this.process = null;
+  }
+}
+
+/**
+ * Runs librespot purely to obtain and cache credentials.
+ *
+ * Emits 'auth-url' with the link the user has to visit, then 'authenticated'
+ * once credentials land on disk. Deliberately separate from the streaming
+ * process: here stdout carries text, there it carries audio.
+ */
+export class SpotifyConnectAuth extends EventEmitter {
+  private process: ChildProcessByStdio<null, Readable, Readable> | null = null;
+
+  get isRunning(): boolean {
+    return this.process !== null;
+  }
+
+  start(options: SpotifyConnectOptions): void {
+    if (this.process) {
+      return;
+    }
+
+    const args = [
+      '--name',
+      options.deviceName,
+      '--backend',
+      'pipe',
+      '--enable-oauth',
+      '--oauth-port',
+      options.oauthPort.toString(),
+    ];
+
+    if (options.cacheDir) {
+      args.push('--cache', options.cacheDir, '--disable-audio-cache');
+    }
+
+    const child = spawn(getExecutable(), args, {stdio: ['ignore', 'pipe', 'pipe']});
+    this.process = child;
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n')) {
+        const index = line.indexOf(AUTH_URL_PREFIX);
+        if (index !== -1) {
+          this.emit('auth-url', line.slice(index + AUTH_URL_PREFIX.length).trim());
+        }
+      }
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      const line = chunk.toString().trim();
+      if (line) {
+        this.emit('log', line);
+      }
+
+      // Librespot announces the account once the code has been accepted.
+      if (line.includes('Authenticated as')) {
+        this.emit('authenticated');
+      }
+    });
+
+    child.on('exit', () => {
+      this.process = null;
+    });
+
+    child.on('error', (error: Error) => {
+      this.process = null;
+      this.emit('error', error);
+    });
+  }
+
+  stop(): void {
+    if (!this.process) {
+      return;
+    }
+
     this.process.kill('SIGTERM');
     this.process = null;
   }

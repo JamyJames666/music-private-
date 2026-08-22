@@ -167,14 +167,17 @@ export interface SpotifyConnectState {
   enabled:    boolean
   active:     boolean
   deviceName: string
+  authUrl:    string | null
 }
 
 export const getSpotifyConnect = (t: string, guildId: string) =>
   req<SpotifyConnectState>('GET', `/api/guilds/${guildId}/spotify-connect`, t)
 export const setSpotifyConnect = (t: string, guildId: string, active: boolean, channelId?: string) =>
-  req<{ok: boolean; active: boolean; deviceName?: string}>(
+  req<{ok: boolean; active: boolean; deviceName?: string; authUrl?: string}>(
     'POST', `/api/guilds/${guildId}/spotify-connect`, t, {active, channelId},
   )
+export const submitSpotifyConnectCode = (t: string, guildId: string, code: string) =>
+  req<{ok: boolean}>('POST', `/api/guilds/${guildId}/spotify-connect/code`, t, {code})
 
 export const getAdminOnly = (t: string, guildId: string) =>
   req<{enabled: boolean}>('GET', `/api/guilds/${guildId}/settings/admin-only`, t)

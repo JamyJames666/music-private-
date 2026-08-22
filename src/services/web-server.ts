@@ -675,7 +675,26 @@ export default class WebServer {
         enabled: isSpotifyConnectEnabled(),
         active: player.isSpotifyConnectActive,
         deviceName: getSpotifyConnectOptions().deviceName,
+        authUrl: player.spotifyConnectAuthUrl,
       });
+    });
+
+    // Completes the sign-in the browser could not: Spotify redirects the code
+    // to 127.0.0.1, which only means anything from inside this container.
+    this.app.post('/api/guilds/:guildId/spotify-connect/code', auth, async (req: express.Request, res: express.Response) => {
+      const {code} = req.body as {code?: string};
+
+      if (!code?.trim()) {
+        res.status(400).json({error: 'Paste the URL you were redirected to'});
+        return;
+      }
+
+      try {
+        await this.playerManager.get(req.params.guildId).submitSpotifyConnectCode(code);
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
     });
 
     this.app.post('/api/guilds/:guildId/spotify-connect', auth, async (req: express.Request, res: express.Response) => {
@@ -717,7 +736,20 @@ export default class WebServer {
         this.broadcastUpdate(req.params.guildId);
         res.json({ok: true, active: true, deviceName: getSpotifyConnectOptions().deviceName});
       } catch (e: unknown) {
-        res.status(400).json({error: (e as Error).message});
+        const {message} = e as Error;
+
+        // First run: sign-in is needed before anything can stream. Hand the
+        // link back so the dashboard can walk the user through it.
+        if (message.startsWith('SPOTIFY_AUTH_REQUIRED:')) {
+          res.json({
+            ok: false,
+            active: false,
+            authUrl: message.slice('SPOTIFY_AUTH_REQUIRED:'.length),
+          });
+          return;
+        }
+
+        res.status(400).json({error: message});
       }
     });
 

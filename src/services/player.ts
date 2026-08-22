@@ -26,7 +26,10 @@ import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {getYouTubeMediaSource, searchWithYtDlp} from '../utils/yt-dlp.js';
 import SpotifyConnect, {
+  SpotifyConnectAuth,
+  deliverOAuthCode,
   getSpotifyConnectOptions,
+  hasCachedCredentials,
   isSpotifyConnectEnabled,
   LIBRESPOT_FFMPEG_INPUT_OPTIONS,
 } from './spotify-connect.js';
@@ -129,6 +132,9 @@ export default class {
   // Set while the bot is acting as a Spotify Connect speaker. Spotify owns
   // playback in that mode, so the queue must keep its hands off.
   private spotifyConnect: SpotifyConnect | null = null;
+
+  private spotifyConnectAuth: SpotifyConnectAuth | null = null;
+  private pendingAuthUrl: string | null = null;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
   private thumbSweepInterval: NodeJS.Timeout | undefined;
@@ -514,6 +520,69 @@ export default class {
     return this.spotifyConnect !== null;
   }
 
+  get spotifyConnectAuthUrl(): string | null {
+    return this.pendingAuthUrl;
+  }
+
+  /**
+   * Starts the one-off sign-in needed before Spotify will stream to this device.
+   *
+   * Resolves with the URL the user must visit. The code that URL produces comes
+   * back through submitSpotifyConnectCode, because Spotify redirects it to
+   * 127.0.0.1 — reachable from in here, but not from the user's browser.
+   */
+  async beginSpotifyConnectAuth(): Promise<string> {
+    if (this.pendingAuthUrl && this.spotifyConnectAuth?.isRunning) {
+      return this.pendingAuthUrl;
+    }
+
+    const auth = new SpotifyConnectAuth();
+    this.spotifyConnectAuth = auth;
+
+    auth.on('log', (line: string) => {
+      console.log(`[librespot:auth] ${line}`);
+    });
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('librespot did not produce a sign-in link in time.'));
+      }, 30_000);
+
+      auth.once('auth-url', (url: string) => {
+        clearTimeout(timer);
+        this.pendingAuthUrl = url;
+        resolve(url);
+      });
+
+      auth.once('error', (error: Error) => {
+        clearTimeout(timer);
+        this.spotifyConnectAuth = null;
+        reject(error);
+      });
+
+      auth.once('authenticated', () => {
+        // Credentials are cached now, so the sign-in process has done its job.
+        this.pendingAuthUrl = null;
+        auth.stop();
+        this.spotifyConnectAuth = null;
+      });
+
+      auth.start(getSpotifyConnectOptions());
+    });
+  }
+
+  /**
+   * Completes sign-in with the code (or full redirected URL) the user pasted.
+   */
+  async submitSpotifyConnectCode(rawUrlOrCode: string): Promise<void> {
+    if (!this.spotifyConnectAuth?.isRunning) {
+      throw new Error('No sign-in is in progress — start Spotify Connect first.');
+    }
+
+    await deliverOAuthCode(rawUrlOrCode, getSpotifyConnectOptions().oauthPort);
+    this.pendingAuthUrl = null;
+  }
+
   /**
    * Hands playback over to Spotify: the bot stops being a queue and becomes a
    * Spotify Connect speaker that shows up in the user's device list.
@@ -525,6 +594,16 @@ export default class {
 
     if (this.spotifyConnect) {
       throw new Error('Spotify Connect is already running.');
+    }
+
+    const options = getSpotifyConnectOptions();
+
+    // Without cached credentials the streaming process cannot reach the
+    // account, and it cannot sign in either — its stdout is carrying audio.
+    // Sign-in has to happen first, in its own process.
+    if (process.env.SPOTIFY_CONNECT_ENABLE_OAUTH === 'true' && !await hasCachedCredentials(options.cacheDir)) {
+      const url = await this.beginSpotifyConnectAuth();
+      throw new Error(`SPOTIFY_AUTH_REQUIRED:${url}`);
     }
 
     const voiceConnection = await this.ensureVoiceConnectionReady();
