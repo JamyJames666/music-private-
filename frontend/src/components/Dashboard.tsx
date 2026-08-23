@@ -12,6 +12,7 @@ import CrossfadeImage from './CrossfadeImage'
 import NowPlaying from './NowPlaying'
 import QueueCard from './QueueCard'
 import AddToQueue from './AddToQueue'
+import SpotifyConnectPanel from './SpotifyConnectPanel'
 import BotSettings from './BotSettings'
 import BulkImport from './BulkImport'
 import Settings from './Settings'
@@ -588,6 +589,9 @@ export default function Dashboard({ token, isAdmin, onSessionExpired, onReconnec
                 activeChannelIds={status?.activeChannelIds ?? []}
                 compact
               />
+              {/* Sits with the player because it is reached mid-session, not
+                  configured once — and it hides itself when disabled. */}
+              <SpotifyConnectPanel token={token} guildId={primaryGuildId} />
             </div>
           </div>
 

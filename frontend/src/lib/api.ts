@@ -164,18 +164,22 @@ export const setWebOnlyMode = (t: string, guildId: string, enabled: boolean) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/settings/web-only-mode`, t, {enabled})
 
 export interface SpotifyConnectState {
-  enabled:    boolean
-  active:     boolean
-  deviceName: string
-  authUrl:    string | null
+  enabled:       boolean
+  active:        boolean
+  deviceName:    string
+  authUrl:       string | null
+  accounts:      string[]
+  activeAccount: string | null
 }
 
 export const getSpotifyConnect = (t: string, guildId: string) =>
   req<SpotifyConnectState>('GET', `/api/guilds/${guildId}/spotify-connect`, t)
-export const setSpotifyConnect = (t: string, guildId: string, active: boolean, channelId?: string) =>
-  req<{ok: boolean; active: boolean; deviceName?: string; authUrl?: string}>(
-    'POST', `/api/guilds/${guildId}/spotify-connect`, t, {active, channelId},
+export const setSpotifyConnect = (t: string, guildId: string, active: boolean, account?: string, channelId?: string) =>
+  req<{ok: boolean; active: boolean; deviceName?: string; authUrl?: string; activeAccount?: string}>(
+    'POST', `/api/guilds/${guildId}/spotify-connect`, t, {active, account, channelId},
   )
+export const unlinkSpotifyAccount = (t: string, guildId: string, account: string) =>
+  req<{ok: boolean}>('DELETE', `/api/guilds/${guildId}/spotify-connect/accounts/${encodeURIComponent(account)}`, t)
 export const submitSpotifyConnectCode = (t: string, guildId: string, code: string) =>
   req<{ok: boolean}>('POST', `/api/guilds/${guildId}/spotify-connect/code`, t, {code})
 

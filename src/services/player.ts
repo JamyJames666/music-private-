@@ -31,6 +31,9 @@ import SpotifyConnect, {
   getSpotifyConnectOptions,
   hasCachedCredentials,
   isSpotifyConnectEnabled,
+  listSpotifyAccounts,
+  promotePendingAccount,
+  removeSpotifyAccount,
   LIBRESPOT_FFMPEG_INPUT_OPTIONS,
 } from './spotify-connect.js';
 import {Setting} from '@prisma/client';
@@ -135,6 +138,10 @@ export default class {
 
   private spotifyConnectAuth: SpotifyConnectAuth | null = null;
   private pendingAuthUrl: string | null = null;
+  // Which linked Spotify account is currently driving. Only one can, because
+  // there is a single voice connection to stream into.
+  private activeSpotifyAccount: string | null = null;
+  private lastLinkedAccount: string | null = null;
   private spotifyConnectAudioCheck: NodeJS.Timeout | null = null;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
@@ -525,6 +532,25 @@ export default class {
     return this.pendingAuthUrl;
   }
 
+  get activeSpotifyConnectAccount(): string | null {
+    return this.activeSpotifyAccount;
+  }
+
+  async listSpotifyConnectAccounts(): Promise<string[]> {
+    return listSpotifyAccounts();
+  }
+
+  /**
+   * Forgets a linked account. Stops playback first if it is the one driving.
+   */
+  async unlinkSpotifyConnectAccount(account: string): Promise<void> {
+    if (this.activeSpotifyAccount === account) {
+      this.stopSpotifyConnect();
+    }
+
+    await removeSpotifyAccount(account);
+  }
+
   /**
    * Starts the one-off sign-in needed before Spotify will stream to this device.
    *
@@ -561,11 +587,22 @@ export default class {
         reject(error);
       });
 
-      auth.once('authenticated', () => {
+      auth.once('authenticated', (username: string) => {
         // Credentials are cached now, so the sign-in process has done its job.
+        // File them under the account that just signed in so this person stays
+        // linked and others can link alongside them.
         this.pendingAuthUrl = null;
         auth.stop();
         this.spotifyConnectAuth = null;
+
+        void promotePendingAccount(username)
+          .then(account => {
+            this.lastLinkedAccount = account;
+            console.log(`[librespot] linked Spotify account: ${account}`);
+          })
+          .catch((error: unknown) => {
+            console.log(`[librespot] could not save the linked account: ${(error as Error).message}`);
+          });
       });
 
       auth.start(getSpotifyConnectOptions());
@@ -588,16 +625,24 @@ export default class {
    * Hands playback over to Spotify: the bot stops being a queue and becomes a
    * Spotify Connect speaker that shows up in the user's device list.
    */
-  async startSpotifyConnect(): Promise<void> {
+  async startSpotifyConnect(account?: string): Promise<void> {
     if (!isSpotifyConnectEnabled()) {
       throw new Error('Spotify Connect is disabled. Set SPOTIFY_CONNECT_ENABLED=true to use it.');
     }
 
+    // Switching accounts is a stop and start rather than an error: only one can
+    // hold the single voice connection, so taking over is the expected move.
     if (this.spotifyConnect) {
-      throw new Error('Spotify Connect is already running.');
+      if (account && account !== this.activeSpotifyAccount) {
+        this.stopSpotifyConnect();
+      } else {
+        throw new Error('Spotify Connect is already running.');
+      }
     }
 
-    const options = getSpotifyConnectOptions();
+    const linkedAccounts = await listSpotifyAccounts();
+    const targetAccount = account ?? this.activeSpotifyAccount ?? this.lastLinkedAccount ?? linkedAccounts.at(0);
+    const options = getSpotifyConnectOptions(targetAccount);
 
     // Without cached credentials the streaming process cannot reach the
     // account, and it cannot sign in either — its stdout is carrying audio.
@@ -606,6 +651,8 @@ export default class {
       const url = await this.beginSpotifyConnectAuth();
       throw new Error(`SPOTIFY_AUTH_REQUIRED:${url}`);
     }
+
+    this.activeSpotifyAccount = targetAccount ?? null;
 
     // The sign-in process is a full Connect device with the same name, and its
     // stdout is parsed as text rather than piped to ffmpeg. Leaving it running
@@ -655,7 +702,7 @@ export default class {
     });
 
     try {
-      const pcm = connect.start(getSpotifyConnectOptions());
+      const pcm = connect.start(options);
 
       // Counting has to happen inside the pipeline, not via a 'data' listener:
       // that would switch the stream to flowing mode and consume it as fast as
@@ -747,6 +794,7 @@ export default class {
 
     this.spotifyConnect.stop();
     this.spotifyConnect = null;
+    this.activeSpotifyAccount = null;
     this.audioPlayer?.stop(true);
     this.status = STATUS.IDLE;
   }

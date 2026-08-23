@@ -669,14 +669,26 @@ export default class WebServer {
       }
     });
 
-    this.app.get('/api/guilds/:guildId/spotify-connect', auth, (req: express.Request, res: express.Response) => {
+    this.app.get('/api/guilds/:guildId/spotify-connect', auth, async (req: express.Request, res: express.Response) => {
       const player = this.playerManager.get(req.params.guildId);
       res.json({
         enabled: isSpotifyConnectEnabled(),
         active: player.isSpotifyConnectActive,
         deviceName: getSpotifyConnectOptions().deviceName,
         authUrl: player.spotifyConnectAuthUrl,
+        accounts: await player.listSpotifyConnectAccounts(),
+        activeAccount: player.activeSpotifyConnectAccount,
       });
+    });
+
+    this.app.delete('/api/guilds/:guildId/spotify-connect/accounts/:account', auth, async (req: express.Request, res: express.Response) => {
+      try {
+        await this.playerManager.get(req.params.guildId).unlinkSpotifyConnectAccount(req.params.account);
+        this.broadcastUpdate(req.params.guildId);
+        res.json({ok: true});
+      } catch (e: unknown) {
+        res.status(400).json({error: (e as Error).message});
+      }
     });
 
     // Completes the sign-in the browser could not: Spotify redirects the code
@@ -698,7 +710,7 @@ export default class WebServer {
     });
 
     this.app.post('/api/guilds/:guildId/spotify-connect', auth, async (req: express.Request, res: express.Response) => {
-      const {active, channelId} = req.body as {active?: boolean; channelId?: string};
+      const {active, channelId, account} = req.body as {active?: boolean; channelId?: string; account?: string};
 
       try {
         const player = this.playerManager.get(req.params.guildId);
@@ -732,9 +744,14 @@ export default class WebServer {
           await player.connect(channel);
         }
 
-        await player.startSpotifyConnect();
+        await player.startSpotifyConnect(account);
         this.broadcastUpdate(req.params.guildId);
-        res.json({ok: true, active: true, deviceName: getSpotifyConnectOptions().deviceName});
+        res.json({
+          ok: true,
+          active: true,
+          deviceName: getSpotifyConnectOptions().deviceName,
+          activeAccount: player.activeSpotifyConnectAccount,
+        });
       } catch (e: unknown) {
         const {message} = e as Error;
 

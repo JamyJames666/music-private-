@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Settings, Check, Users, Globe, ShieldOff, Radio } from 'lucide-react'
+import { ChevronDown, Settings, Check, Users, Globe, ShieldOff } from 'lucide-react'
 import {
   getTextChannels,
   getAnnouncementChannel,
@@ -10,9 +10,6 @@ import {
   setWebOnlyMode,
   getAdminOnly,
   setAdminOnly,
-  getSpotifyConnect,
-  setSpotifyConnect,
-  submitSpotifyConnectCode,
   type Channel,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -75,36 +72,22 @@ export default function BotSettings({ token, guildId }: Props) {
   const [aoSaving,    setAoSaving]         = useState(false)
   const [aoSaved,     setAoSaved]          = useState(false)
 
-  const [scEnabled,    setScEnabled]    = useState(false)
-  const [scActive,     setScActive]     = useState(false)
-  const [scDeviceName, setScDeviceName] = useState('Muse')
-  const [scSaving,     setScSaving]     = useState(false)
-  const [scError,      setScError]      = useState<string | null>(null)
-  const [scAuthUrl,    setScAuthUrl]    = useState<string | null>(null)
-  const [scCode,       setScCode]       = useState('')
-  const [scCodeSaving, setScCodeSaving] = useState(false)
-
   const load = useCallback(async () => {
     if (!guildId) return
     setLoading(true)
     try {
-      const [chs, setting, sr, wom, ao, sc] = await Promise.all([
+      const [chs, setting, sr, wom, ao] = await Promise.all([
         getTextChannels(token, guildId),
         getAnnouncementChannel(token, guildId),
         getSongRequestSetting(token, guildId).catch(() => ({ open: true })),
         getWebOnlyMode(token, guildId).catch(() => ({ enabled: false })),
         getAdminOnly(token, guildId).catch(() => ({ enabled: false })),
-        getSpotifyConnect(token, guildId).catch(() => ({ enabled: false, active: false, deviceName: 'Muse', authUrl: null })),
       ])
       setChannels(chs)
       setCurrent(setting.announcementChannelId)
       setSongRequestsOpen(sr.open)
       setWebOnlyModeState(wom.enabled)
       setAdminOnlyState(ao.enabled)
-      setScEnabled(sc.enabled)
-      setScActive(sc.active)
-      setScDeviceName(sc.deviceName)
-      setScAuthUrl(sc.authUrl ?? null)
     } catch {
       /* non-fatal */
     } finally {
@@ -127,50 +110,6 @@ export default function BotSettings({ token, guildId }: Props) {
       /* best-effort */
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleSpotifyConnect = async (active: boolean) => {
-    setScSaving(true)
-    setScError(null)
-    try {
-      const res = await setSpotifyConnect(token, guildId, active)
-      // First run returns a sign-in link instead of starting: Spotify has to
-      // authorise this device once before it can stream to it.
-      if (res.authUrl) {
-        setScAuthUrl(res.authUrl)
-        setScActive(false)
-        return
-      }
-
-      setScAuthUrl(null)
-      setScActive(res.active)
-      if (res.deviceName) setScDeviceName(res.deviceName)
-    } catch (e) {
-      // Starting can legitimately fail (bot not in voice, librespot missing),
-      // so surface it rather than silently snapping the toggle back.
-      setScError(e instanceof Error ? e.message : 'Could not change Spotify Connect')
-      setScActive(!active)
-    } finally {
-      setScSaving(false)
-    }
-  }
-
-  const handleSpotifyCode = async () => {
-    setScCodeSaving(true)
-    setScError(null)
-    try {
-      await submitSpotifyConnectCode(token, guildId, scCode)
-      setScAuthUrl(null)
-      setScCode('')
-      // Credentials are cached now, so this start actually streams.
-      const res = await setSpotifyConnect(token, guildId, true)
-      setScActive(res.active)
-      if (res.deviceName) setScDeviceName(res.deviceName)
-    } catch (e) {
-      setScError(e instanceof Error ? e.message : 'Could not complete sign-in')
-    } finally {
-      setScCodeSaving(false)
     }
   }
 
@@ -320,82 +259,6 @@ export default function BotSettings({ token, guildId }: Props) {
       </div>
 
       <div className="border-t border-app-border" />
-
-      {/* Spotify Connect — hidden entirely unless the server has it enabled */}
-      {scEnabled && (
-        <>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <Radio size={13} className="flex-shrink-0 text-app-muted" />
-              <div>
-                <p className="text-sm text-app-text">Spotify Connect</p>
-                <p className="text-xs text-app-border">
-                  {scActive
-                    ? `Live — pick "${scDeviceName}" in your Spotify app. The queue is bypassed while this is on.`
-                    : 'Turn on to control playback from Spotify itself. Requires Premium.'}
-                </p>
-                {scError && <p className="text-xs text-red-400 mt-0.5">{scError}</p>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Toggle checked={scActive} onChange={handleSpotifyConnect} disabled={scSaving} />
-            </div>
-          </div>
-
-          {scAuthUrl && (
-            <div className="rounded-lg border border-app-border p-3 space-y-3">
-              <p className="text-xs text-app-text font-medium">
-                One-time Spotify sign-in
-              </p>
-
-              <div className="space-y-1">
-                <p className="text-xs text-app-border">
-                  <span className="text-app-muted">1.</span>{' '}
-                  <a
-                    href={scAuthUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                    style={{ color: 'rgb(var(--accent-rgb))' }}
-                  >
-                    Open the Spotify sign-in page
-                  </a>{' '}
-                  and approve access.
-                </p>
-                <p className="text-xs text-app-border">
-                  <span className="text-app-muted">2.</span> Your browser will land on a
-                  page that <strong>fails to load</strong> (127.0.0.1). That is expected.
-                </p>
-                <p className="text-xs text-app-border">
-                  <span className="text-app-muted">3.</span> Copy that failed page&apos;s full
-                  address and paste it below.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={scCode}
-                  onChange={e => setScCode(e.target.value)}
-                  placeholder="http://127.0.0.1:5588/login?code=..."
-                  className="flex-1 min-w-0 text-xs px-2 py-1.5 rounded border border-app-border bg-transparent text-app-text placeholder:text-app-border focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleSpotifyCode}
-                  disabled={scCodeSaving || !scCode.trim()}
-                  className="text-xs px-3 py-1.5 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: 'rgb(var(--accent-rgb))' }}
-                >
-                  {scCodeSaving ? 'Signing in…' : 'Finish'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="border-t border-app-border" />
-        </>
-      )}
 
       {/* Admin-only mode */}
       <div className="flex items-center justify-between gap-4">

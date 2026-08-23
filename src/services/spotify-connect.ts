@@ -43,6 +43,56 @@ const AUTH_URL_PREFIX = 'Browse to: ';
 
 export const getCredentialsPath = (cacheDir: string) => path.join(cacheDir, 'credentials.json');
 
+// Each linked Spotify account gets its own credential cache, so several people
+// can stay signed in and hand control between them without repeating the
+// sign-in. Only one can drive playback at a time — there is a single voice
+// connection — so switching stops the current one and starts theirs.
+const getBaseCacheDir = () => process.env.SPOTIFY_CONNECT_CACHE_DIR?.trim()
+  ?? (process.env.DATA_DIR ? path.join(process.env.DATA_DIR, 'librespot') : path.join(process.cwd(), 'data', 'librespot'));
+
+export const getAccountsDir = () => path.join(getBaseCacheDir(), 'accounts');
+
+// Sign-in happens here because librespot picks the account itself; only once it
+// reports who logged in can the cache be filed under a name.
+export const getPendingAccountDir = () => path.join(getBaseCacheDir(), 'pending');
+
+// Account names come from Spotify and end up as directory names, so keep them
+// to something that cannot escape the accounts directory.
+const sanitizeAccountName = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_').slice(0, 64);
+
+export const getAccountCacheDir = (account: string) => path.join(getAccountsDir(), sanitizeAccountName(account));
+
+export const listSpotifyAccounts = async (): Promise<string[]> => {
+  try {
+    const entries = await fs.readdir(getAccountsDir(), {withFileTypes: true});
+    const accounts = await Promise.all(entries
+      .filter(entry => entry.isDirectory())
+      .map(async entry => (await hasCachedCredentials(path.join(getAccountsDir(), entry.name))) ? entry.name : null));
+
+    return accounts.filter((name): name is string => name !== null).sort();
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Files a freshly signed-in credential cache under the account that owns it.
+ */
+export const promotePendingAccount = async (username: string): Promise<string> => {
+  const account = sanitizeAccountName(username);
+  const target = getAccountCacheDir(account);
+
+  await fs.mkdir(getAccountsDir(), {recursive: true});
+  await fs.rm(target, {recursive: true, force: true});
+  await fs.rename(getPendingAccountDir(), target);
+
+  return account;
+};
+
+export const removeSpotifyAccount = async (account: string): Promise<void> => {
+  await fs.rm(getAccountCacheDir(account), {recursive: true, force: true});
+};
+
 export const hasCachedCredentials = async (cacheDir?: string): Promise<boolean> => {
   if (!cacheDir) {
     return false;
@@ -109,12 +159,16 @@ const buildOAuthQuery = (rawUrlOrCode: string): string => {
 
 export const isSpotifyConnectEnabled = () => process.env.SPOTIFY_CONNECT_ENABLED === 'true';
 
-export const getSpotifyConnectOptions = (): SpotifyConnectOptions => ({
+/**
+ * @param account which linked Spotify account to use; omit for the sign-in
+ *   flow, which does not yet know who is logging in.
+ */
+export const getSpotifyConnectOptions = (account?: string): SpotifyConnectOptions => ({
   deviceName: process.env.SPOTIFY_CONNECT_DEVICE_NAME?.trim() ?? 'Muse',
   bitrate: (Number(process.env.SPOTIFY_CONNECT_BITRATE) === 96 || Number(process.env.SPOTIFY_CONNECT_BITRATE) === 160
     ? Number(process.env.SPOTIFY_CONNECT_BITRATE)
     : 320) as 96 | 160 | 320,
-  cacheDir: process.env.SPOTIFY_CONNECT_CACHE_DIR?.trim() ?? (process.env.DATA_DIR ? `${process.env.DATA_DIR}/librespot` : undefined),
+  cacheDir: account ? getAccountCacheDir(account) : getPendingAccountDir(),
   initialVolume: 100,
   oauthPort: Number(process.env.SPOTIFY_CONNECT_OAUTH_PORT) || DEFAULT_OAUTH_PORT,
 });
@@ -261,9 +315,11 @@ export class SpotifyConnectAuth extends EventEmitter {
         this.emit('log', line);
       }
 
-      // Librespot announces the account once the code has been accepted.
-      if (line.includes('Authenticated as')) {
-        this.emit('authenticated');
+      // Librespot announces which account signed in once the code has been
+      // accepted; that name is what the credential cache gets filed under.
+      const authenticated = /Authenticated as '([^']+)'/.exec(line);
+      if (authenticated) {
+        this.emit('authenticated', authenticated[1]);
       }
     });
 
