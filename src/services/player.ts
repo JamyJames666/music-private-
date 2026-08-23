@@ -681,18 +681,29 @@ export default class {
       // still flowing means Spotify is not driving this process at all.
       let wasFlowing = false;
       let lastByteCount = 0;
+      let ticksWhileFlowing = 0;
       this.spotifyConnectAudioCheck = setInterval(() => {
         const delta = bytesFromLibrespot - lastByteCount;
         lastByteCount = bytesFromLibrespot;
         const isFlowing = delta > 0;
+
+        const rate = Math.round(delta / 1024 / 3);
 
         if (isFlowing !== wasFlowing) {
           wasFlowing = isFlowing;
           // Realtime for 44.1kHz stereo S16 is ~172 KB/s; anything far above
           // that means audio is being buffered ahead rather than streamed.
           console.log(isFlowing
-            ? `[librespot] audio flowing (${Math.round(delta / 1024 / 3)} KB/s, realtime is ~172)`
+            ? `[librespot] audio flowing (${rate} KB/s, realtime is ~172)`
             : '[librespot] audio stopped at source');
+        }
+
+        // Transition-only logging hides the steady-state rate, which is the
+        // number that shows whether audio is creeping ahead of playback and
+        // growing the pause delay. Sample it occasionally while flowing.
+        ticksWhileFlowing = isFlowing ? ticksWhileFlowing + 1 : 0;
+        if (isFlowing && ticksWhileFlowing % 10 === 0) {
+          console.log(`[librespot] steady state: ${rate} KB/s (realtime is ~172)`);
         }
       }, 3_000);
 
@@ -700,10 +711,13 @@ export default class {
 
       this.audioPlayer = createAudioPlayer({
         behaviors: {
-          // Pausing on the phone starves the pipe. The default would call that
-          // a dead stream within a second and stop; this rides out long gaps
-          // instead. Process exit is what signals a genuine failure here.
-          maxMissedFrames: 10_000,
+          // A paused phone starves this pipe indefinitely and that is normal,
+          // so the player must never treat silence as a dead stream. Any finite
+          // limit is just a timer until Connect breaks: at 10_000 frames it
+          // gave up after exactly 200s paused, destroyed the stream, killed
+          // ffmpeg, and left librespot connected but inaudible. librespot
+          // exiting is the only real failure signal here.
+          maxMissedFrames: Number.MAX_SAFE_INTEGER,
         },
       });
 
@@ -1547,9 +1561,15 @@ export default class {
       .on('error', error => {
         // A killed process on teardown is expected, so this is only noise worth
         // reporting while Connect is meant to be running.
-        if (this.spotifyConnect) {
-          console.log(`[librespot] audio pipeline error: ${error.message}`);
+        if (!this.spotifyConnect) {
+          return;
         }
+
+        // Once ffmpeg is gone no audio can reach Discord again, but librespot
+        // stays connected and the device keeps looking healthy in Spotify.
+        // Tearing down makes the failure visible instead of silent.
+        console.log(`[librespot] audio pipeline died (${error.message}) — stopping Spotify Connect`);
+        this.stopSpotifyConnect();
       });
 
     // A small buffer here keeps only a fraction of a second in flight. The
