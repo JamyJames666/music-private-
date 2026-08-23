@@ -675,11 +675,24 @@ export default class {
         },
       });
 
-      this.spotifyConnectAudioCheck = setTimeout(() => {
-        if (bytesFromLibrespot === 0) {
-          console.log('[librespot] no audio after 30s — is Muse selected as the device in Spotify, and is something playing?');
+      // Logged on transition only, so the question "did pausing in Spotify
+      // actually stop the audio at the source?" can be answered from the logs.
+      // Bytes stopping but sound continuing means buffering downstream; bytes
+      // still flowing means Spotify is not driving this process at all.
+      let wasFlowing = false;
+      let lastByteCount = 0;
+      this.spotifyConnectAudioCheck = setInterval(() => {
+        const delta = bytesFromLibrespot - lastByteCount;
+        lastByteCount = bytesFromLibrespot;
+        const isFlowing = delta > 0;
+
+        if (isFlowing !== wasFlowing) {
+          wasFlowing = isFlowing;
+          console.log(isFlowing
+            ? `[librespot] audio flowing (${Math.round(delta / 1024)} KB/s)`
+            : '[librespot] audio stopped at source');
         }
-      }, 30_000);
+      }, 3_000);
 
       const stream = this.createLiveReadStream(pcm.pipe(meter), [...LIBRESPOT_FFMPEG_INPUT_OPTIONS]);
 
@@ -708,7 +721,7 @@ export default class {
 
   stopSpotifyConnect(): void {
     if (this.spotifyConnectAudioCheck) {
-      clearTimeout(this.spotifyConnectAudioCheck);
+      clearInterval(this.spotifyConnectAudioCheck);
       this.spotifyConnectAudioCheck = null;
     }
 
