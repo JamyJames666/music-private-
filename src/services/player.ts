@@ -688,8 +688,10 @@ export default class {
 
         if (isFlowing !== wasFlowing) {
           wasFlowing = isFlowing;
+          // Realtime for 44.1kHz stereo S16 is ~172 KB/s; anything far above
+          // that means audio is being buffered ahead rather than streamed.
           console.log(isFlowing
-            ? `[librespot] audio flowing (${Math.round(delta / 1024)} KB/s)`
+            ? `[librespot] audio flowing (${Math.round(delta / 1024 / 3)} KB/s, realtime is ~172)`
             : '[librespot] audio stopped at source');
         }
       }, 3_000);
@@ -1505,11 +1507,20 @@ export default class {
     const command = ffmpeg(input)
       .inputOptions([
         ...ffmpegInputOptions,
+        // Read the pipe at realtime. Without this ffmpeg consumes as fast as
+        // librespot can produce and buffers tens of seconds internally, so
+        // librespot races ahead in bursts and pause/skip act on audio that has
+        // already passed through. Downstream backpressure alone only applies
+        // once those internal buffers fill, which is far too late.
+        '-re',
         // Do not sit on input waiting to fill a buffer; this is a live source.
         '-fflags',
         '+nobuffer',
         '-flags',
         'low_delay',
+        // Keep the demuxer queue small so it cannot hoard either.
+        '-thread_queue_size',
+        '64',
       ])
       .noVideo()
       .audioCodec('libopus')
