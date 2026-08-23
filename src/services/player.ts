@@ -1,5 +1,5 @@
 import {VoiceChannel, Snowflake} from 'discord.js';
-import {Readable, Transform} from 'stream';
+import {PassThrough, Readable, Transform} from 'stream';
 import {setTimeout as sleep} from 'timers/promises';
 import hasha from 'hasha';
 import {WriteStream} from 'fs-capacitor';
@@ -712,7 +712,7 @@ export default class {
         conn.subscribe(this.audioPlayer);
       }
 
-      this.playAudioPlayerResource(this.createAudioStream(stream));
+      this.playAudioPlayerResource(this.createLiveAudioStream(stream));
       this.status = STATUS.PLAYING;
     } catch (error: unknown) {
       connect.stop();
@@ -1552,7 +1552,13 @@ export default class {
         }
       });
 
-    return command.pipe() as unknown as Readable;
+    // A small buffer here keeps only a fraction of a second in flight. The
+    // default 64KB is roughly a second and a half of Opus, all of which has to
+    // drain before a pause is audible.
+    const output = new PassThrough({highWaterMark: 4096});
+    command.pipe(output);
+
+    return output;
   }
 
   private async createReadStream(options: {input: string | Readable; ytdlpKill?: () => void; cacheKey: string; ffmpegInputOptions?: string[]; cache?: boolean; songLength?: number}): Promise<Readable> {
@@ -1640,6 +1646,22 @@ export default class {
     return createAudioResource(stream, {
       inputType: StreamType.WebmOpus,
       inlineVolume: true,
+    });
+  }
+
+  /**
+   * Audio resource for a live source, tuned for responsiveness over features.
+   *
+   * inlineVolume makes discord.js demux, decode, apply volume and re-encode,
+   * and every stage of that holds audio. Leaving it off lets Opus packets pass
+   * through with only demuxing, which is both cheaper and markedly shorter —
+   * that length is exactly the delay between pausing in Spotify and the sound
+   * actually stopping. Volume is Spotify's job in this mode anyway.
+   */
+  private createLiveAudioStream(stream: Readable) {
+    return createAudioResource(stream, {
+      inputType: StreamType.WebmOpus,
+      inlineVolume: false,
     });
   }
 
