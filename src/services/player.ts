@@ -39,6 +39,10 @@ import SpotifyConnect, {
 import {Setting} from '@prisma/client';
 import https from 'https';
 
+// One 20ms frame of the s16le stereo 48kHz PCM Discord expects. Live buffers
+// are sized in whole frames so their cost in delay stays obvious.
+const LIVE_PCM_FRAME_BYTES = 48_000 * 2 * 2 * 0.02;
+
 // A track that stops this early never actually streamed.
 const MIN_SUCCESSFUL_PLAY_SECONDS = 5;
 // How many duds in a row before giving up instead of chewing through the queue.
@@ -711,6 +715,7 @@ export default class {
       let hasLoggedFirstAudio = false;
       let bytesFromLibrespot = 0;
       const meter = new Transform({
+        highWaterMark: 8192,
         transform(chunk: Buffer, _encoding, callback) {
           bytesFromLibrespot += chunk.length;
           if (!hasLoggedFirstAudio) {
@@ -1569,43 +1574,44 @@ export default class {
     const command = ffmpeg(input)
       .inputOptions([
         ...ffmpegInputOptions,
-        // Read the pipe at realtime. Without this ffmpeg consumes as fast as
-        // librespot can produce and buffers tens of seconds internally, so
-        // librespot races ahead in bursts and pause/skip act on audio that has
-        // already passed through. Downstream backpressure alone only applies
-        // once those internal buffers fill, which is far too late.
-        '-re',
-        // Do not sit on input waiting to fill a buffer; this is a live source.
-        '-fflags',
-        '+nobuffer',
+        // Deliberately no -re. Reading at realtime paced the stream back when
+        // everything downstream buffered heavily, but it also means the backlog
+        // that builds up here at startup is never caught up — ffmpeg refuses to
+        // read faster than realtime, so it becomes permanent delay. Downstream
+        // is tight enough now that Discord's own realtime consumption paces the
+        // chain, and the backlog drains instead of sitting there.
+        // Deliberately no '-fflags +nobuffer'. It sounds right for a live
+        // source but discards whatever ffmpeg buffered while probing the
+        // input — measured at ~1.2s of every stream silently lost.
         '-flags',
         'low_delay',
         // Keep the demuxer queue small so it cannot hoard either.
         '-thread_queue_size',
         '64',
+        // Skip ffmpeg's own 32KB I/O buffering.
+        '-avioflags',
+        'direct',
+        // The input format is fully declared, so there is nothing to probe.
+        // Skipping it avoids the startup delay that probing would add, without
+        // dropping the probed audio the way +nobuffer does.
+        '-analyzeduration',
+        '0',
+        '-probesize',
+        '32',
       ])
       .noVideo()
-      .audioCodec('libopus')
       .outputOptions([
-        // The Matroska muxer batches audio into clusters, which by default hold
-        // seconds of sound before anything is emitted. That delay is what makes
-        // pause and skip feel broken: Discord is still playing audio Spotify
-        // has already moved past. Cap the cluster and flush every packet.
-        '-cluster_time_limit',
-        '100',
-        '-flush_packets',
-        '1',
-        '-max_delay',
-        '0',
-        '-muxdelay',
-        '0',
-        '-muxpreload',
-        '0',
-        // Shorter frames give the encoder less to hold onto.
-        '-frame_duration',
-        '20',
+        // Raw PCM rather than Opus in a container. Two reasons: no muxer means
+        // nothing batches audio before it is emitted, and a byte of PCM is
+        // ~16x less time than a byte of Opus, so every buffer downstream costs
+        // proportionally less delay. ffmpeg is now only resampling 44.1k to the
+        // 48k Discord requires; discord.js does the Opus encoding.
+        '-ar',
+        '48000',
+        '-ac',
+        '2',
       ])
-      .outputFormat('webm')
+      .outputFormat('s16le')
       .on('error', error => {
         // A killed process on teardown is expected, so this is only noise worth
         // reporting while Connect is meant to be running.
@@ -1620,10 +1626,10 @@ export default class {
         this.stopSpotifyConnect();
       });
 
-    // A small buffer here keeps only a fraction of a second in flight. The
-    // default 64KB is roughly a second and a half of Opus, all of which has to
-    // drain before a pause is audible.
-    const output = new PassThrough({highWaterMark: 4096});
+    // Two 20ms frames of 48kHz stereo s16le. Sizing in whole frames keeps the
+    // relationship between buffer size and delay obvious: one frame is
+    // 48000 * 2ch * 2B * 0.02s = 3840 bytes.
+    const output = new PassThrough({highWaterMark: LIVE_PCM_FRAME_BYTES * 2});
     command.pipe(output);
 
     return output;
@@ -1718,18 +1724,17 @@ export default class {
   }
 
   /**
-   * Audio resource for a live source, tuned for responsiveness over features.
+   * Audio resource for a live source, tuned for responsiveness.
    *
-   * inlineVolume makes discord.js demux, decode, apply volume and re-encode,
-   * and every stage of that holds audio. Leaving it off lets Opus packets pass
-   * through with only demuxing, which is both cheaper and markedly shorter —
-   * that length is exactly the delay between pausing in Spotify and the sound
-   * actually stopping. Volume is Spotify's job in this mode anyway.
+   * The stream is raw PCM, so discord.js encodes Opus itself and frames it
+   * correctly without being told. inlineVolume is affordable again here: on a
+   * container-wrapped Opus stream it forced demux, decode, volume and re-encode
+   * — on PCM it is a sample multiply, so volume control costs almost nothing.
    */
   private createLiveAudioStream(stream: Readable) {
     return createAudioResource(stream, {
-      inputType: StreamType.WebmOpus,
-      inlineVolume: false,
+      inputType: StreamType.Raw,
+      inlineVolume: true,
     });
   }
 
