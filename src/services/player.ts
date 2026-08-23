@@ -1,5 +1,5 @@
 import {VoiceChannel, Snowflake} from 'discord.js';
-import {Readable} from 'stream';
+import {Readable, Transform} from 'stream';
 import {setTimeout as sleep} from 'timers/promises';
 import hasha from 'hasha';
 import {WriteStream} from 'fs-capacitor';
@@ -657,16 +657,22 @@ export default class {
     try {
       const pcm = connect.start(getSpotifyConnectOptions());
 
-      // Distinguishes "Spotify never sent audio" from "audio arrived but died
-      // downstream in ffmpeg or Discord" — otherwise both look like silence.
+      // Counting has to happen inside the pipeline, not via a 'data' listener:
+      // that would switch the stream to flowing mode and consume it as fast as
+      // librespot produces, removing the backpressure this mode depends on.
+      // A Transform stays subject to the downstream pace.
       let hasLoggedFirstAudio = false;
       let bytesFromLibrespot = 0;
-      pcm.on('data', (chunk: Buffer) => {
-        bytesFromLibrespot += chunk.length;
-        if (!hasLoggedFirstAudio) {
-          hasLoggedFirstAudio = true;
-          console.log('[librespot] receiving audio from Spotify');
-        }
+      const meter = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          bytesFromLibrespot += chunk.length;
+          if (!hasLoggedFirstAudio) {
+            hasLoggedFirstAudio = true;
+            console.log('[librespot] receiving audio from Spotify');
+          }
+
+          callback(null, chunk);
+        },
       });
 
       this.spotifyConnectAudioCheck = setTimeout(() => {
@@ -675,11 +681,7 @@ export default class {
         }
       }, 30_000);
 
-      const stream = await this.createReadStream({
-        input: pcm,
-        cacheKey: 'spotify-connect',
-        ffmpegInputOptions: [...LIBRESPOT_FFMPEG_INPUT_OPTIONS],
-      });
+      const stream = this.createLiveReadStream(pcm.pipe(meter), [...LIBRESPOT_FFMPEG_INPUT_OPTIONS]);
 
       this.audioPlayer = createAudioPlayer({
         behaviors: {
@@ -1470,6 +1472,37 @@ export default class {
     }
 
     return ['-headers', `${headerLines}\r\n`];
+  }
+
+  /**
+   * Transcodes a live source without buffering it.
+   *
+   * The queue path pipes ffmpeg through an fs-capacitor, which stores the whole
+   * output on disk. For a finite song that is harmless, but a Spotify Connect
+   * stream is open-ended and librespot's pipe backend writes as fast as its
+   * reader accepts — a real sound card is what normally paces it. An unbounded
+   * buffer accepts everything instantly, so librespot races through the
+   * playlist at many times realtime while Discord still plays second-by-second.
+   *
+   * Piping ffmpeg straight through lets Discord's realtime consumption apply
+   * backpressure all the way back to librespot, which is what keeps Spotify in
+   * step and makes pause and skip land where the listener expects.
+   */
+  private createLiveReadStream(input: Readable, ffmpegInputOptions: string[]): Readable {
+    const command = ffmpeg(input)
+      .inputOptions(ffmpegInputOptions)
+      .noVideo()
+      .audioCodec('libopus')
+      .outputFormat('webm')
+      .on('error', error => {
+        // A killed process on teardown is expected, so this is only noise worth
+        // reporting while Connect is meant to be running.
+        if (this.spotifyConnect) {
+          console.log(`[librespot] audio pipeline error: ${error.message}`);
+        }
+      });
+
+    return command.pipe() as unknown as Readable;
   }
 
   private async createReadStream(options: {input: string | Readable; ytdlpKill?: () => void; cacheKey: string; ffmpegInputOptions?: string[]; cache?: boolean; songLength?: number}): Promise<Readable> {
