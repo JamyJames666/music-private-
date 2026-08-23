@@ -1490,9 +1490,35 @@ export default class {
    */
   private createLiveReadStream(input: Readable, ffmpegInputOptions: string[]): Readable {
     const command = ffmpeg(input)
-      .inputOptions(ffmpegInputOptions)
+      .inputOptions([
+        ...ffmpegInputOptions,
+        // Do not sit on input waiting to fill a buffer; this is a live source.
+        '-fflags',
+        '+nobuffer',
+        '-flags',
+        'low_delay',
+      ])
       .noVideo()
       .audioCodec('libopus')
+      .outputOptions([
+        // The Matroska muxer batches audio into clusters, which by default hold
+        // seconds of sound before anything is emitted. That delay is what makes
+        // pause and skip feel broken: Discord is still playing audio Spotify
+        // has already moved past. Cap the cluster and flush every packet.
+        '-cluster_time_limit',
+        '100',
+        '-flush_packets',
+        '1',
+        '-max_delay',
+        '0',
+        '-muxdelay',
+        '0',
+        '-muxpreload',
+        '0',
+        // Shorter frames give the encoder less to hold onto.
+        '-frame_duration',
+        '20',
+      ])
       .outputFormat('webm')
       .on('error', error => {
         // A killed process on teardown is expected, so this is only noise worth
